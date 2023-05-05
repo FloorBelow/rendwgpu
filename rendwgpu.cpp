@@ -7,10 +7,14 @@
 #include "webgpu\webgpu.h"
 #include "webgpu\wgpu.h"
 
+#define WEBGPU_CPP_IMPLEMENTATION
+#include "webgpu\webgpu.hpp"
+
 #include "glfw3webgpu\glfw3webgpu.h"
 #include <cassert>
 
 using namespace std;
+using namespace wgpu;
 
 WGPUAdapter requestAdapter(WGPUInstance instance, WGPURequestAdapterOptions const* options) {
 	// A simple structure holding the local information shared with the
@@ -104,40 +108,24 @@ int main()
 		return 1;
 	}
 
-	WGPUInstanceDescriptor instanceDesc;
-	instanceDesc.nextInChain = nullptr;
-	WGPUInstance instance = wgpuCreateInstance(&instanceDesc);
-	if (!instance) {
-		std::cerr << "Could not initialize WebGPU!" << std::endl;
-		return 1;
-	}
+	//INSTANCE
+	Instance instance = wgpu::createInstance(InstanceDescriptor());
 
-	WGPUSurface surface = glfwGetWGPUSurface(instance, window);
-
+	Surface surface = glfwGetWGPUSurface(instance, window);
 	 
-	WGPURequestAdapterOptions adapterOptions;
-	adapterOptions.nextInChain = nullptr;
-	adapterOptions.compatibleSurface = surface;
-	WGPUAdapter adapter = requestAdapter(instance, &adapterOptions);
-	if(!adapter) {
-		std::cerr << "Could not get adapter!" << std::endl;
-		return 1;
-	}
 
-	WGPUDeviceDescriptor deviceDescriptor;
-	deviceDescriptor.nextInChain = nullptr;
+	RequestAdapterOptions adapterOptions;
+	adapterOptions.compatibleSurface = surface;
+	Adapter adapter = instance.requestAdapter(adapterOptions);
+
+	//DEVICE
+	DeviceDescriptor deviceDescriptor;
 	deviceDescriptor.label = "Default Device";
 	deviceDescriptor.requiredFeaturesCount = 0;
 	deviceDescriptor.requiredLimits = nullptr;
-	deviceDescriptor.defaultQueue.nextInChain = nullptr;
 	deviceDescriptor.defaultQueue.label = "Default Queue";
-
-	WGPUDevice device = requestDevice(adapter, &deviceDescriptor);
-	if (!device) {
-		std::cerr << "Could not get device!" << std::endl;
-		return 1;
-	}
-
+	Device device = adapter.requestDevice(deviceDescriptor);
+	
 	//TODO figure out what this means
 	auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
 		std::cout << "Uncaptured device error: type " << type;
@@ -147,40 +135,23 @@ int main()
 	wgpuDeviceSetUncapturedErrorCallback(device, onDeviceError, nullptr /* pUserData */);
 
 	
-	
-	WGPUSwapChainDescriptor swapChainDescriptor;
-	swapChainDescriptor.nextInChain = nullptr;
+	//SWAPCHAIN
+	SwapChainDescriptor swapChainDescriptor;
 	swapChainDescriptor.width = 1600;
 	swapChainDescriptor.height = 900;
 	swapChainDescriptor.usage = WGPUTextureUsage_RenderAttachment;
-	WGPUTextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
+	TextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
 	swapChainDescriptor.format = swapChainFormat;
 	swapChainDescriptor.presentMode = WGPUPresentMode_Fifo; //TODO - mailbox?
-	WGPUSwapChain swapChain = wgpuDeviceCreateSwapChain(device, surface, &swapChainDescriptor);
+	SwapChain swapChain = device.createSwapChain(surface, swapChainDescriptor);
 	
 	
-	WGPUQueue queue = wgpuDeviceGetQueue(device);
+	Queue queue = device.getQueue();
 	
-
-
-	/*
-
-	WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &encoderDescriptor);
-	wgpuCommandEncoderInsertDebugMarker(encoder, "Test 1");
-	wgpuCommandEncoderInsertDebugMarker(encoder, "Test 2");
-
-	
-	
-
-	wgpuQueueSubmit(queue, 1, &commandBuffer);
-	*/
-	
-	WGPUCommandEncoderDescriptor encoderDescriptor;
-	encoderDescriptor.nextInChain = nullptr;
+	CommandEncoderDescriptor encoderDescriptor;
 	encoderDescriptor.label = "Default Encoder";
 
-	WGPUCommandBufferDescriptor bufferDescriptor;
-	bufferDescriptor.nextInChain = nullptr;
+	CommandBufferDescriptor bufferDescriptor;
 	bufferDescriptor.label = "Default command buffer";
 
 
@@ -191,26 +162,25 @@ int main()
 
 
 		
-		WGPUTextureView nextFrame = wgpuSwapChainGetCurrentTextureView(swapChain);
+		TextureView nextFrame = swapChain.getCurrentTextureView();
 		if (!nextFrame) {
 			std::cerr << "Cannot acquire next swap chain texture" << std::endl;
 			break;
 		}
-		std::cout << "nextTexture: " << nextFrame << std::endl;
+		std::cout << "next frame: " << nextFrame << std::endl;
 
 
 
 
-		WGPURenderPassColorAttachment renderPassColorAttachment;
+		RenderPassColorAttachment renderPassColorAttachment;
 		renderPassColorAttachment.view = nextFrame;
 		renderPassColorAttachment.resolveTarget = nullptr;
 		renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
 		renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
 		renderPassColorAttachment.clearValue = WGPUColor{ 0.05, 0.1, 0.11, 1.0 };
 
-		WGPURenderPassDescriptor renderPassDescriptor;
+		RenderPassDescriptor renderPassDescriptor;
 		renderPassDescriptor.label = "Default Render Pass";
-		renderPassDescriptor.nextInChain = nullptr;
 		renderPassDescriptor.colorAttachmentCount = 1;
 		renderPassDescriptor.colorAttachments = &renderPassColorAttachment;
 		renderPassDescriptor.depthStencilAttachment = nullptr;
@@ -219,17 +189,17 @@ int main()
 
 
 		//swapChain.present();
-		WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &encoderDescriptor);
-		WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDescriptor);
-		wgpuRenderPassEncoderEnd(renderPass);
+		CommandEncoder encoder = device.createCommandEncoder(encoderDescriptor);
+		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDescriptor);
+		renderPass.end();
 
 		wgpuTextureViewDrop(nextFrame);
 
 
-		WGPUCommandBuffer commandBuffer = wgpuCommandEncoderFinish(encoder, &bufferDescriptor);
-		wgpuQueueSubmit(queue, 1, &commandBuffer);
+		CommandBuffer commandBuffer = encoder.finish(bufferDescriptor);
+		queue.submit(commandBuffer);
 
-		wgpuSwapChainPresent(swapChain);
+		swapChain.present();
 
 		
 		//std::cout << "nextTexture: " << nextFrame << std::endl;
