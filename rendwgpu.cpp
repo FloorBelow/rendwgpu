@@ -16,6 +16,26 @@
 using namespace std;
 using namespace wgpu;
 
+const char* shaderText = R"(
+@vertex
+fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
+	var p = vec2f(0.0, 0.0);
+	if (in_vertex_index == 0u) {
+		p = vec2f(-0.5, -0.5);
+	} else if (in_vertex_index == 1u) {
+		p = vec2f(0.5, -0.5);
+	} else {
+		p = vec2f(0.0, 0.5);
+	}
+	return vec4f(p, 0.0, 1.0);
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4f {
+    return vec4f(0.0, 0.4, 1.0, 1.0);
+}
+)";
+
 WGPUAdapter requestAdapter(WGPUInstance instance, WGPURequestAdapterOptions const* options) {
 	// A simple structure holding the local information shared with the
 	// onAdapterRequestEnded callback.
@@ -154,6 +174,65 @@ int main()
 	CommandBufferDescriptor bufferDescriptor;
 	bufferDescriptor.label = "Default command buffer";
 
+	//shader
+	ShaderModuleDescriptor shaderDescriptor;
+	shaderDescriptor.hintCount = 0;
+	shaderDescriptor.hints = nullptr;
+	ShaderModuleWGSLDescriptor shaderCodeDescriptor;
+	shaderCodeDescriptor.chain.next = nullptr;
+	shaderCodeDescriptor.chain.sType = SType::ShaderModuleWGSLDescriptor;
+	shaderCodeDescriptor.code = shaderText;
+	shaderDescriptor.nextInChain = &shaderCodeDescriptor.chain;
+
+	ShaderModule shader = device.createShaderModule(shaderDescriptor);
+
+	//render pipeline object
+	RenderPipelineDescriptor pipelineDescriptor;
+
+	pipelineDescriptor.vertex.bufferCount = 0;
+	pipelineDescriptor.vertex.buffers = nullptr;
+	pipelineDescriptor.vertex.module = shader;//shader module
+	pipelineDescriptor.vertex.entryPoint = "vs_main";
+	pipelineDescriptor.vertex.constantCount = 0;
+	pipelineDescriptor.vertex.constants = nullptr;
+
+	pipelineDescriptor.primitive.topology = PrimitiveTopology::TriangleList;
+	pipelineDescriptor.primitive.stripIndexFormat = IndexFormat::Undefined;
+	pipelineDescriptor.primitive.frontFace = FrontFace::CCW;
+	pipelineDescriptor.primitive.cullMode = CullMode::None;
+
+	BlendState blendState;
+	blendState.color.srcFactor = BlendFactor::SrcAlpha;
+	blendState.color.dstFactor = BlendFactor::OneMinusSrcAlpha;
+	blendState.color.operation = BlendOperation::Add;
+	blendState.alpha.srcFactor = BlendFactor::Zero;
+	blendState.alpha.dstFactor = BlendFactor::One;
+	blendState.alpha.operation = BlendOperation::Add;
+
+	ColorTargetState colorTarget;
+	colorTarget.format = swapChainFormat;
+	colorTarget.blend = &blendState;
+	colorTarget.writeMask = ColorWriteMask::All;
+
+	FragmentState fragmentState;
+	fragmentState.module = shader;
+	fragmentState.entryPoint = "fs_main";
+	fragmentState.constantCount = 0;
+	fragmentState.constants = nullptr;
+	fragmentState.targetCount = 1;
+	fragmentState.targets = &colorTarget;
+	pipelineDescriptor.fragment = &fragmentState;
+
+	pipelineDescriptor.depthStencil = nullptr;
+
+	pipelineDescriptor.multisample.count = 1;
+	pipelineDescriptor.multisample.mask = ~0u;
+	pipelineDescriptor.multisample.alphaToCoverageEnabled = false;
+
+	pipelineDescriptor.layout = nullptr;
+
+	RenderPipeline pipeline = device.createRenderPipeline(pipelineDescriptor);
+
 
 	cout << "Hello CMake." << endl;
 
@@ -191,6 +270,8 @@ int main()
 		//swapChain.present();
 		CommandEncoder encoder = device.createCommandEncoder(encoderDescriptor);
 		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDescriptor);
+		renderPass.setPipeline(pipeline);
+		renderPass.draw(3, 1, 0, 0);
 		renderPass.end();
 
 		wgpuTextureViewDrop(nextFrame);
