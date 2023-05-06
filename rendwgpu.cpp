@@ -12,29 +12,10 @@
 
 #include "glfw3webgpu\glfw3webgpu.h"
 #include <cassert>
+#include <fstream>
 
 using namespace std;
 using namespace wgpu;
-
-const char* shaderText = R"(
-@vertex
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
-	var p = vec2f(0.0, 0.0);
-	if (in_vertex_index == 0u) {
-		p = vec2f(-0.5, -0.5);
-	} else if (in_vertex_index == 1u) {
-		p = vec2f(0.5, -0.5);
-	} else {
-		p = vec2f(0.0, 0.5);
-	}
-	return vec4f(p, 0.0, 1.0);
-}
-
-@fragment
-fn fs_main() -> @location(0) vec4f {
-    return vec4f(0.0, 0.4, 1.0, 1.0);
-}
-)";
 
 WGPUAdapter requestAdapter(WGPUInstance instance, WGPURequestAdapterOptions const* options) {
 	// A simple structure holding the local information shared with the
@@ -181,9 +162,17 @@ int main()
 	ShaderModuleWGSLDescriptor shaderCodeDescriptor;
 	shaderCodeDescriptor.chain.next = nullptr;
 	shaderCodeDescriptor.chain.sType = SType::ShaderModuleWGSLDescriptor;
-	shaderCodeDescriptor.code = shaderText;
-	shaderDescriptor.nextInChain = &shaderCodeDescriptor.chain;
 
+	ifstream shaderFileStream;
+	shaderFileStream.open("E:/Anna/Anna/Visual Studio/rendwgpu/defaultshader.wgsl");
+	shaderFileStream.seekg(0, std::ios_base::end);
+	int shaderTextLength = (int) shaderFileStream.tellg();
+	shaderFileStream.seekg(0);
+	std::vector<char> shaderText(shaderTextLength);
+	shaderFileStream.read(shaderText.data(), shaderTextLength);
+	shaderFileStream.close();
+	shaderCodeDescriptor.code = shaderText.data();
+	shaderDescriptor.nextInChain = &shaderCodeDescriptor.chain;
 	ShaderModule shader = device.createShaderModule(shaderDescriptor);
 
 	//render pipeline object
