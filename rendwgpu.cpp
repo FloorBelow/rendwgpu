@@ -94,6 +94,7 @@ WGPUDevice requestDevice(WGPUAdapter adapter, WGPUDeviceDescriptor const* descri
 
 int main()
 {
+
 	glfwInit();
 	if (!glfwInit()) {
 		std::cerr << "Could not initialize GLFW!" << std::endl;
@@ -114,16 +115,32 @@ int main()
 
 	Surface surface = glfwGetWGPUSurface(instance, window);
 	 
-
+	//ADAPTER
 	RequestAdapterOptions adapterOptions;
 	adapterOptions.compatibleSurface = surface;
 	Adapter adapter = instance.requestAdapter(adapterOptions);
 
+	
+
+	
 	//DEVICE
+	SupportedLimits adapterLimits;
+	adapter.getLimits(&adapterLimits);
+
+	RequiredLimits deviceReqs;
+	deviceReqs.limits.maxVertexAttributes = 2;
+	deviceReqs.limits.maxVertexBuffers = 1;
+	deviceReqs.limits.maxInterStageShaderComponents = 3;
+	deviceReqs.limits.maxBufferSize = 6 * 5 * sizeof(float);
+	deviceReqs.limits.maxVertexBufferArrayStride = 5 * sizeof(float);
+	//required for some reason
+	deviceReqs.limits.minUniformBufferOffsetAlignment = adapterLimits.limits.minUniformBufferOffsetAlignment;
+	deviceReqs.limits.minStorageBufferOffsetAlignment = adapterLimits.limits.minStorageBufferOffsetAlignment;
+
 	DeviceDescriptor deviceDescriptor;
 	deviceDescriptor.label = "Default Device";
 	deviceDescriptor.requiredFeaturesCount = 0;
-	deviceDescriptor.requiredLimits = nullptr;
+	deviceDescriptor.requiredLimits = &deviceReqs;
 	deviceDescriptor.defaultQueue.label = "Default Queue";
 	Device device = adapter.requestDevice(deviceDescriptor);
 	
@@ -148,7 +165,9 @@ int main()
 	
 	
 	Queue queue = device.getQueue();
-	
+
+
+	//command buffer descs, use this to create the command buffer each frame
 	CommandEncoderDescriptor encoderDescriptor;
 	encoderDescriptor.label = "Default Encoder";
 
@@ -220,7 +239,64 @@ int main()
 
 	pipelineDescriptor.layout = nullptr;
 
+	//VERTEX BUFFER
+	std::vector<float> vertexData = {
+		-0.5, -0.5, 1.0, 0.0, 0.0,
+		+0.5, -0.5, 0.0, 1.0, 0.0,
+		+0.0,   +0.5, 0.0, 0.0, 1.0,
+		-0.55f, -0.5, 1.0, 1.0, 0.0,
+		-0.05f, +0.5, 1.0, 0.0, 1.0,
+		-0.55f, +0.5, 0.0, 1.0, 1.0 
+	};
+	int vertexCount = static_cast<int>(vertexData.size() / 5);
+
+	BufferDescriptor vBufferDesc;
+	vBufferDesc.size = vertexData.size() * sizeof(float);
+	vBufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
+	vBufferDesc.mappedAtCreation = false;
+	vBufferDesc.label = "vertex buffer";
+	Buffer vBuffer = device.createBuffer(vBufferDesc);
+	queue.writeBuffer(vBuffer, 0, vertexData.data(), vBufferDesc.size);
+
+	//VERTEX BUFFER LAYOUT
+	VertexBufferLayout vBufferLayout;
+
+	std::vector<VertexAttribute> vBufferAttribs(2);
+	//position
+	vBufferAttribs[0].shaderLocation = 0;
+	vBufferAttribs[0].offset = 0;
+	vBufferAttribs[0].format = VertexFormat::Float32x2;
+	//color
+	vBufferAttribs[1].shaderLocation = 1;
+	vBufferAttribs[1].offset = 2 * sizeof(float);
+	vBufferAttribs[1].format = VertexFormat::Float32x3;
+
+	vBufferLayout.attributeCount = static_cast<uint32_t>(vBufferAttribs.size());
+	vBufferLayout.attributes = vBufferAttribs.data();
+	vBufferLayout.arrayStride = 5 * sizeof(float);
+	vBufferLayout.stepMode = VertexStepMode::Vertex;
+	pipelineDescriptor.vertex.bufferCount = 1;
+	pipelineDescriptor.vertex.buffers = &vBufferLayout;
+
+	//IDX BUFFER
+	std::vector<uint16_t> idxData = {
+		0, 1, 2,
+		3, 4, 5,
+		0, 3, 4,
+	};
+	int idxCount = static_cast<int>(idxData.size());
+	BufferDescriptor idxBufferDesc;
+	//A writeBuffer operation must copy a number of bytes that is a multiple of 4. To ensure so we can switch bufferDesc.size for (bufferDesc.size + 3) & ~3.
+	idxBufferDesc.size = (idxCount * sizeof(uint16_t) + 3) & ~3;
+	idxBufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Index;
+	idxBufferDesc.mappedAtCreation = false;
+	idxBufferDesc.label = "idx buffer";
+	Buffer idxBuffer = device.createBuffer(idxBufferDesc);
+	queue.writeBuffer(idxBuffer, 0, idxData.data(), idxBufferDesc.size);
+
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDescriptor);
+
+
 
 
 	cout << "Hello CMake." << endl;
@@ -260,7 +336,9 @@ int main()
 		CommandEncoder encoder = device.createCommandEncoder(encoderDescriptor);
 		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDescriptor);
 		renderPass.setPipeline(pipeline);
-		renderPass.draw(3, 1, 0, 0);
+		renderPass.setVertexBuffer(0, vBuffer, 0, vertexData.size() * sizeof(float));
+		renderPass.setIndexBuffer(idxBuffer, IndexFormat::Uint16, 0, idxData.size() * sizeof(uint16_t));
+		renderPass.drawIndexed(idxCount, 1, 0, 0, 0);
 		renderPass.end();
 
 		wgpuTextureViewDrop(nextFrame);
