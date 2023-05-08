@@ -1,5 +1,5 @@
 struct VertexInput {
-    @location(0) position: vec2f,
+    @location(0) position: vec3f,
     @location(1) color: vec3f,
 };
 
@@ -17,10 +17,20 @@ struct VertexOutput {
     @location(0) color: vec3f,
 };
 
+@group(0) @binding(0) var<uniform> uTime: f32;
+
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
+
+    let a = sin(uTime);
+    let b = cos(uTime);
+
     var out: VertexOutput;
-    out.position = vec4f(in.position, 0.0, 1.0);
+    out.position = vec4f(
+        in.position.x * a + in.position.y * b,
+        in.position.z,
+        (in.position.y * a - in.position.x * b) * 0.5 + 0.5,
+        1.0);
     out.color = in.color; // forward to the fragment shader
     return out;
 }

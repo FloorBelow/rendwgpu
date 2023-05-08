@@ -94,6 +94,9 @@ WGPUDevice requestDevice(WGPUAdapter adapter, WGPUDeviceDescriptor const* descri
 
 int main()
 {
+	unsigned int windowWidth = 900;
+	unsigned int windowHeight = 900;
+
 
 	glfwInit();
 	if (!glfwInit()) {
@@ -103,7 +106,7 @@ int main()
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-	GLFWwindow* window = glfwCreateWindow(1600, 900, "render", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(windowWidth, windowHeight, "render", NULL, NULL);
 	if (!window) {
 		std::cerr << "Could not open window!" << std::endl;
 		glfwTerminate();
@@ -131,11 +134,19 @@ int main()
 	deviceReqs.limits.maxVertexAttributes = 2;
 	deviceReqs.limits.maxVertexBuffers = 1;
 	deviceReqs.limits.maxInterStageShaderComponents = 3;
-	deviceReqs.limits.maxBufferSize = 6 * 5 * sizeof(float);
-	deviceReqs.limits.maxVertexBufferArrayStride = 5 * sizeof(float);
-	//required for some reason
+	deviceReqs.limits.maxBufferSize = 6 * 6 * sizeof(float);
+	deviceReqs.limits.maxVertexBufferArrayStride = 6 * sizeof(float);
+	//alignments should use default values rather than zero
 	deviceReqs.limits.minUniformBufferOffsetAlignment = adapterLimits.limits.minUniformBufferOffsetAlignment;
 	deviceReqs.limits.minStorageBufferOffsetAlignment = adapterLimits.limits.minStorageBufferOffsetAlignment;
+
+	//for uniform binding
+	deviceReqs.limits.maxBindGroups = 1;
+	deviceReqs.limits.maxUniformBuffersPerShaderStage = 1;
+	deviceReqs.limits.maxUniformBufferBindingSize = 16 * sizeof(float);
+
+	deviceReqs.limits.maxTextureDimension2D = 2048;
+	deviceReqs.limits.maxTextureArrayLayers = 1;
 
 	DeviceDescriptor deviceDescriptor;
 	deviceDescriptor.label = "Default Device";
@@ -143,6 +154,39 @@ int main()
 	deviceDescriptor.requiredLimits = &deviceReqs;
 	deviceDescriptor.defaultQueue.label = "Default Queue";
 	Device device = adapter.requestDevice(deviceDescriptor);
+
+	SupportedLimits limits;
+	bool success = device.getLimits(&limits);
+	if (success) {
+		std::cout << "Device limits:" << std::endl;
+		std::cout << " - maxTextureDimension1D: " << limits.limits.maxTextureDimension1D << std::endl;
+		std::cout << " - maxTextureDimension2D: " << limits.limits.maxTextureDimension2D << std::endl;
+		std::cout << " - maxTextureDimension3D: " << limits.limits.maxTextureDimension3D << std::endl;
+		std::cout << " - maxTextureArrayLayers: " << limits.limits.maxTextureArrayLayers << std::endl;
+		std::cout << " - maxBindGroups: " << limits.limits.maxBindGroups << std::endl;
+		std::cout << " - maxDynamicUniformBuffersPerPipelineLayout: " << limits.limits.maxDynamicUniformBuffersPerPipelineLayout << std::endl;
+		std::cout << " - maxDynamicStorageBuffersPerPipelineLayout: " << limits.limits.maxDynamicStorageBuffersPerPipelineLayout << std::endl;
+		std::cout << " - maxSampledTexturesPerShaderStage: " << limits.limits.maxSampledTexturesPerShaderStage << std::endl;
+		std::cout << " - maxSamplersPerShaderStage: " << limits.limits.maxSamplersPerShaderStage << std::endl;
+		std::cout << " - maxStorageBuffersPerShaderStage: " << limits.limits.maxStorageBuffersPerShaderStage << std::endl;
+		std::cout << " - maxStorageTexturesPerShaderStage: " << limits.limits.maxStorageTexturesPerShaderStage << std::endl;
+		std::cout << " - maxUniformBuffersPerShaderStage: " << limits.limits.maxUniformBuffersPerShaderStage << std::endl;
+		std::cout << " - maxUniformBufferBindingSize: " << limits.limits.maxUniformBufferBindingSize << std::endl;
+		std::cout << " - maxStorageBufferBindingSize: " << limits.limits.maxStorageBufferBindingSize << std::endl;
+		std::cout << " - minUniformBufferOffsetAlignment: " << limits.limits.minUniformBufferOffsetAlignment << std::endl;
+		std::cout << " - minStorageBufferOffsetAlignment: " << limits.limits.minStorageBufferOffsetAlignment << std::endl;
+		std::cout << " - maxVertexBuffers: " << limits.limits.maxVertexBuffers << std::endl;
+		std::cout << " - maxVertexAttributes: " << limits.limits.maxVertexAttributes << std::endl;
+		std::cout << " - maxVertexBufferArrayStride: " << limits.limits.maxVertexBufferArrayStride << std::endl;
+		std::cout << " - maxInterStageShaderComponents: " << limits.limits.maxInterStageShaderComponents << std::endl;
+		std::cout << " - maxComputeWorkgroupStorageSize: " << limits.limits.maxComputeWorkgroupStorageSize << std::endl;
+		std::cout << " - maxComputeInvocationsPerWorkgroup: " << limits.limits.maxComputeInvocationsPerWorkgroup << std::endl;
+		std::cout << " - maxComputeWorkgroupSizeX: " << limits.limits.maxComputeWorkgroupSizeX << std::endl;
+		std::cout << " - maxComputeWorkgroupSizeY: " << limits.limits.maxComputeWorkgroupSizeY << std::endl;
+		std::cout << " - maxComputeWorkgroupSizeZ: " << limits.limits.maxComputeWorkgroupSizeZ << std::endl;
+		std::cout << " - maxComputeWorkgroupsPerDimension: " << limits.limits.maxComputeWorkgroupsPerDimension << std::endl;
+	}
+
 	
 	//TODO figure out what this means
 	auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
@@ -155,8 +199,8 @@ int main()
 	
 	//SWAPCHAIN
 	SwapChainDescriptor swapChainDescriptor;
-	swapChainDescriptor.width = 1600;
-	swapChainDescriptor.height = 900;
+	swapChainDescriptor.width = windowWidth;
+	swapChainDescriptor.height = windowHeight;
 	swapChainDescriptor.usage = WGPUTextureUsage_RenderAttachment;
 	TextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
 	swapChainDescriptor.format = swapChainFormat;
@@ -231,7 +275,42 @@ int main()
 	fragmentState.targets = &colorTarget;
 	pipelineDescriptor.fragment = &fragmentState;
 
-	pipelineDescriptor.depthStencil = nullptr;
+	TextureFormat depthTextureFormat = TextureFormat::Depth24Plus;
+	DepthStencilState depthState = Default;
+	depthState.depthCompare = CompareFunction::Less;
+	depthState.depthWriteEnabled = true;
+	depthState.format = depthTextureFormat;
+	depthState.stencilReadMask = 0;
+	depthState.stencilWriteMask = 0;
+	pipelineDescriptor.depthStencil = &depthState;
+
+
+	// Create the depth texture
+	TextureDescriptor depthTextureDesc;
+	depthTextureDesc.dimension = TextureDimension::_2D;
+	depthTextureDesc.format = depthTextureFormat;
+	depthTextureDesc.mipLevelCount = 1;
+	depthTextureDesc.sampleCount = 1;
+	depthTextureDesc.size = { windowWidth, windowHeight, 1 };
+	depthTextureDesc.usage = TextureUsage::RenderAttachment;
+	depthTextureDesc.viewFormatCount = 1;
+	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureFormat;
+	Texture depthTexture = device.createTexture(depthTextureDesc);
+
+
+	// Create the view of the depth texture manipulated by the rasterizer
+	TextureViewDescriptor depthTextureViewDesc;
+	depthTextureViewDesc.aspect = TextureAspect::DepthOnly;
+	depthTextureViewDesc.baseArrayLayer = 0;
+	depthTextureViewDesc.arrayLayerCount = 1;
+	depthTextureViewDesc.baseMipLevel = 0;
+	depthTextureViewDesc.mipLevelCount = 1;
+	depthTextureViewDesc.dimension = TextureViewDimension::_2D;
+	depthTextureViewDesc.format = depthTextureFormat;
+	TextureView depthTextureView = depthTexture.createView(depthTextureViewDesc);
+
+	std::cout << depthTextureViewDesc.format << endl;
+
 
 	pipelineDescriptor.multisample.count = 1;
 	pipelineDescriptor.multisample.mask = ~0u;
@@ -241,14 +320,13 @@ int main()
 
 	//VERTEX BUFFER
 	std::vector<float> vertexData = {
-		-0.5, -0.5, 1.0, 0.0, 0.0,
-		+0.5, -0.5, 0.0, 1.0, 0.0,
-		+0.0,   +0.5, 0.0, 0.0, 1.0,
-		-0.55f, -0.5, 1.0, 1.0, 0.0,
-		-0.05f, +0.5, 1.0, 0.0, 1.0,
-		-0.55f, +0.5, 0.0, 1.0, 1.0 
+		-0.5f, -0.5f, -0.3f, 0.0f, 0.0f, 0.0f,
+		+0.5f, -0.5f, -0.3f, 1.0f, 0.0f, 0.0f,
+		+0.5f, +0.5f, -0.3f, 1.0f, 1.0f, 0.0f,
+		-0.5f, +0.5f, -0.3f, 0.0f, 1.0f, 0.0f,
+		+0.0f, +0.0f, +0.5f, 0.5f, 0.5f, 1.0f,
 	};
-	int vertexCount = static_cast<int>(vertexData.size() / 5);
+	int vertexCount = static_cast<int>(vertexData.size() / 6);
 
 	BufferDescriptor vBufferDesc;
 	vBufferDesc.size = vertexData.size() * sizeof(float);
@@ -265,15 +343,15 @@ int main()
 	//position
 	vBufferAttribs[0].shaderLocation = 0;
 	vBufferAttribs[0].offset = 0;
-	vBufferAttribs[0].format = VertexFormat::Float32x2;
+	vBufferAttribs[0].format = VertexFormat::Float32x3;
 	//color
 	vBufferAttribs[1].shaderLocation = 1;
-	vBufferAttribs[1].offset = 2 * sizeof(float);
+	vBufferAttribs[1].offset = 3 * sizeof(float);
 	vBufferAttribs[1].format = VertexFormat::Float32x3;
 
 	vBufferLayout.attributeCount = static_cast<uint32_t>(vBufferAttribs.size());
 	vBufferLayout.attributes = vBufferAttribs.data();
-	vBufferLayout.arrayStride = 5 * sizeof(float);
+	vBufferLayout.arrayStride = 6 * sizeof(float);
 	vBufferLayout.stepMode = VertexStepMode::Vertex;
 	pipelineDescriptor.vertex.bufferCount = 1;
 	pipelineDescriptor.vertex.buffers = &vBufferLayout;
@@ -281,8 +359,11 @@ int main()
 	//IDX BUFFER
 	std::vector<uint16_t> idxData = {
 		0, 1, 2,
-		3, 4, 5,
-		0, 3, 4,
+		0, 2, 3,
+		0, 1, 4,
+		1, 2, 4,
+		2, 3, 4,
+		3, 0, 4
 	};
 	int idxCount = static_cast<int>(idxData.size());
 	BufferDescriptor idxBufferDesc;
@@ -294,6 +375,39 @@ int main()
 	Buffer idxBuffer = device.createBuffer(idxBufferDesc);
 	queue.writeBuffer(idxBuffer, 0, idxData.data(), idxBufferDesc.size);
 
+	//Time Uniform
+	BufferDescriptor uniformBufferDesc;
+	uniformBufferDesc.size = sizeof(float);
+	uniformBufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
+	uniformBufferDesc.mappedAtCreation = false;
+	uniformBufferDesc.label = "uniform buffer";
+	Buffer uniformBuffer = device.createBuffer(uniformBufferDesc);
+
+	//Uniform bind group layout
+	BindGroupLayoutEntry uniformLayoutEntry;// = Default; //TODO what happens if this isnt here
+	uniformLayoutEntry.binding = 0;
+	uniformLayoutEntry.visibility = ShaderStage::Vertex;
+	uniformLayoutEntry.buffer.type = BufferBindingType::Uniform;
+	uniformLayoutEntry.buffer.minBindingSize = sizeof(float);
+
+	BindGroupLayoutDescriptor uniformLayoutDesc;
+	uniformLayoutDesc.entryCount = 1;
+	uniformLayoutDesc.entries = &uniformLayoutEntry;
+	BindGroupLayout uniformLayout = device.createBindGroupLayout(uniformLayoutDesc);
+
+	//uniform bind group
+	BindGroupEntry uniformGroupEntry;
+	uniformGroupEntry.binding = 0;
+	uniformGroupEntry.buffer = uniformBuffer;
+	uniformGroupEntry.offset = 0;
+	uniformGroupEntry.size = sizeof(float);
+
+	BindGroupDescriptor uniformGroupDesc;
+	uniformGroupDesc.layout = uniformLayout;
+	uniformGroupDesc.entryCount = 1;
+	uniformGroupDesc.entries = &uniformGroupEntry;
+	BindGroup uniformGroup = device.createBindGroup(uniformGroupDesc);
+
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDescriptor);
 
 
@@ -304,6 +418,8 @@ int main()
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
+		float time = (float)glfwGetTime();
+		queue.writeBuffer(uniformBuffer, 0, &time, sizeof(float));
 
 		
 		TextureView nextFrame = swapChain.getCurrentTextureView();
@@ -319,15 +435,29 @@ int main()
 		RenderPassColorAttachment renderPassColorAttachment;
 		renderPassColorAttachment.view = nextFrame;
 		renderPassColorAttachment.resolveTarget = nullptr;
-		renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
-		renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
+		renderPassColorAttachment.loadOp = LoadOp::Clear;
+		renderPassColorAttachment.storeOp = StoreOp::Store;
 		renderPassColorAttachment.clearValue = WGPUColor{ 0.05, 0.1, 0.11, 1.0 };
+
+		RenderPassDepthStencilAttachment renderPassDepthAttatchment;
+		renderPassDepthAttatchment.view = depthTextureView;
+
+		renderPassDepthAttatchment.depthClearValue = 1.0f;
+		renderPassDepthAttatchment.depthLoadOp = LoadOp::Clear;
+		renderPassDepthAttatchment.depthStoreOp = StoreOp::Store;
+		renderPassDepthAttatchment.depthReadOnly = false;
+
+		renderPassDepthAttatchment.stencilClearValue = 0;
+		renderPassDepthAttatchment.stencilLoadOp = LoadOp::Clear;
+		renderPassDepthAttatchment.stencilStoreOp = StoreOp::Store;
+		renderPassDepthAttatchment.stencilReadOnly = false;
+
 
 		RenderPassDescriptor renderPassDescriptor;
 		renderPassDescriptor.label = "Default Render Pass";
 		renderPassDescriptor.colorAttachmentCount = 1;
 		renderPassDescriptor.colorAttachments = &renderPassColorAttachment;
-		renderPassDescriptor.depthStencilAttachment = nullptr;
+		renderPassDescriptor.depthStencilAttachment = &renderPassDepthAttatchment;
 		renderPassDescriptor.timestampWriteCount = 0;
 		renderPassDescriptor.timestampWrites = nullptr;
 
@@ -338,6 +468,7 @@ int main()
 		renderPass.setPipeline(pipeline);
 		renderPass.setVertexBuffer(0, vBuffer, 0, vertexData.size() * sizeof(float));
 		renderPass.setIndexBuffer(idxBuffer, IndexFormat::Uint16, 0, idxData.size() * sizeof(uint16_t));
+		renderPass.setBindGroup(0, uniformGroup, 0, nullptr);
 		renderPass.drawIndexed(idxCount, 1, 0, 0, 0);
 		renderPass.end();
 
