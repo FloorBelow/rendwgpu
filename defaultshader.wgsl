@@ -17,13 +17,20 @@ struct VertexOutput {
     @location(0) color: vec3f,
 };
 
-@group(0) @binding(0) var<uniform> uTime: f32;
+struct Uniforms {
+    proj: mat4x4<f32>,
+    view: mat4x4<f32>,
+    model: mat4x4<f32>,
+    time: f32,
+};
+
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
 
-    let a = sin(uTime);
-    let b = cos(uTime);
+    let a = sin(uniforms.time);
+    let b = cos(uniforms.time);
 
     var out: VertexOutput;
     out.position = vec4f(

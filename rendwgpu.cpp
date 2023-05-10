@@ -11,11 +11,21 @@
 #include "webgpu\webgpu.hpp"
 
 #include "glfw3webgpu\glfw3webgpu.h"
+#include "glm\glm.hpp"
+
 #include <cassert>
 #include <fstream>
 
 using namespace std;
 using namespace wgpu;
+
+struct Uniforms {
+	glm::mat4x4 proj;
+	glm::mat4x4 view;
+	glm::mat4x4 model;
+	float time;
+	float padding[3];
+};
 
 WGPUAdapter requestAdapter(WGPUInstance instance, WGPURequestAdapterOptions const* options) {
 	// A simple structure holding the local information shared with the
@@ -134,7 +144,7 @@ int main()
 	deviceReqs.limits.maxVertexAttributes = 2;
 	deviceReqs.limits.maxVertexBuffers = 1;
 	deviceReqs.limits.maxInterStageShaderComponents = 3;
-	deviceReqs.limits.maxBufferSize = 6 * 6 * sizeof(float);
+	deviceReqs.limits.maxBufferSize = sizeof(Uniforms);
 	deviceReqs.limits.maxVertexBufferArrayStride = 6 * sizeof(float);
 	//alignments should use default values rather than zero
 	deviceReqs.limits.minUniformBufferOffsetAlignment = adapterLimits.limits.minUniformBufferOffsetAlignment;
@@ -143,7 +153,7 @@ int main()
 	//for uniform binding
 	deviceReqs.limits.maxBindGroups = 1;
 	deviceReqs.limits.maxUniformBuffersPerShaderStage = 1;
-	deviceReqs.limits.maxUniformBufferBindingSize = 16 * sizeof(float);
+	deviceReqs.limits.maxUniformBufferBindingSize = sizeof(Uniforms);
 
 	deviceReqs.limits.maxTextureDimension2D = 2048;
 	deviceReqs.limits.maxTextureArrayLayers = 1;
@@ -204,7 +214,7 @@ int main()
 	swapChainDescriptor.usage = WGPUTextureUsage_RenderAttachment;
 	TextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
 	swapChainDescriptor.format = swapChainFormat;
-	swapChainDescriptor.presentMode = WGPUPresentMode_Fifo; //TODO - mailbox?
+	swapChainDescriptor.presentMode = WGPUPresentMode_Mailbox; //TODO - mailbox?
 	SwapChain swapChain = device.createSwapChain(surface, swapChainDescriptor);
 	
 	
@@ -375,9 +385,9 @@ int main()
 	Buffer idxBuffer = device.createBuffer(idxBufferDesc);
 	queue.writeBuffer(idxBuffer, 0, idxData.data(), idxBufferDesc.size);
 
-	//Time Uniform
+	//not just Time Uniform buffer
 	BufferDescriptor uniformBufferDesc;
-	uniformBufferDesc.size = sizeof(float);
+	uniformBufferDesc.size = sizeof(Uniforms);
 	uniformBufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
 	uniformBufferDesc.mappedAtCreation = false;
 	uniformBufferDesc.label = "uniform buffer";
@@ -388,7 +398,7 @@ int main()
 	uniformLayoutEntry.binding = 0;
 	uniformLayoutEntry.visibility = ShaderStage::Vertex;
 	uniformLayoutEntry.buffer.type = BufferBindingType::Uniform;
-	uniformLayoutEntry.buffer.minBindingSize = sizeof(float);
+	uniformLayoutEntry.buffer.minBindingSize = sizeof(Uniforms);
 
 	BindGroupLayoutDescriptor uniformLayoutDesc;
 	uniformLayoutDesc.entryCount = 1;
@@ -400,7 +410,7 @@ int main()
 	uniformGroupEntry.binding = 0;
 	uniformGroupEntry.buffer = uniformBuffer;
 	uniformGroupEntry.offset = 0;
-	uniformGroupEntry.size = sizeof(float);
+	uniformGroupEntry.size = sizeof(Uniforms);
 
 	BindGroupDescriptor uniformGroupDesc;
 	uniformGroupDesc.layout = uniformLayout;
@@ -410,7 +420,12 @@ int main()
 
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDescriptor);
 
-
+	Uniforms uniformData;
+	uniformData.view = glm::mat4x4(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+	uniformData.proj = glm::mat4x4(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+	uniformData.model = glm::mat4x4(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+	uniformData.time = (float)glfwGetTime();
+	queue.writeBuffer(uniformBuffer, 0, &uniformData, sizeof(Uniforms));
 
 
 	cout << "Hello CMake." << endl;
@@ -418,8 +433,8 @@ int main()
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
-		float time = (float)glfwGetTime();
-		queue.writeBuffer(uniformBuffer, 0, &time, sizeof(float));
+		uniformData.time = (float)glfwGetTime();
+		queue.writeBuffer(uniformBuffer, offsetof(Uniforms, time), &uniformData.time, sizeof(float));
 
 		
 		TextureView nextFrame = swapChain.getCurrentTextureView();
