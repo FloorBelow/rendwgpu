@@ -12,6 +12,9 @@
 
 #include "glfw3webgpu\glfw3webgpu.h"
 #include "glm\glm.hpp"
+#include "glm\ext.hpp"
+using glm::vec3;
+using glm::mat4;
 
 #include <cassert>
 #include <fstream>
@@ -20,9 +23,9 @@ using namespace std;
 using namespace wgpu;
 
 struct Uniforms {
-	glm::mat4x4 proj;
-	glm::mat4x4 view;
-	glm::mat4x4 model;
+	mat4 proj;
+	mat4 view;
+	mat4 model;
 	float time;
 	float padding[3];
 };
@@ -104,7 +107,7 @@ WGPUDevice requestDevice(WGPUAdapter adapter, WGPUDeviceDescriptor const* descri
 
 int main()
 {
-	unsigned int windowWidth = 900;
+	unsigned int windowWidth = 1600;
 	unsigned int windowHeight = 900;
 
 
@@ -421,9 +424,25 @@ int main()
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDescriptor);
 
 	Uniforms uniformData;
-	uniformData.view = glm::mat4x4(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-	uniformData.proj = glm::mat4x4(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-	uniformData.model = glm::mat4x4(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+
+	//where can i find an actual pi
+	const float PI = 3.141592654f;
+
+	//proj
+	float near = 0.001f;
+	float far = 100.0f;
+	float ratio = ((float)windowWidth) / ((float)windowHeight);
+	float fov = 45 * PI / 180;
+	uniformData.proj = glm::perspective(fov, ratio, near, far);
+
+	//view
+	uniformData.view = glm::translate(mat4(1), vec3(0, 0, -3));
+	uniformData.view = glm::rotate(uniformData.view, -60 * PI / 180, vec3(1, 0, 0));
+
+	//model
+	uniformData.model = mat4(1);
+
 	uniformData.time = (float)glfwGetTime();
 	queue.writeBuffer(uniformBuffer, 0, &uniformData, sizeof(Uniforms));
 
@@ -435,6 +454,13 @@ int main()
 
 		uniformData.time = (float)glfwGetTime();
 		queue.writeBuffer(uniformBuffer, offsetof(Uniforms, time), &uniformData.time, sizeof(float));
+
+
+		uniformData.model = glm::rotate(mat4(1), uniformData.time, vec3(0.0, 0.0, 1.0));
+		uniformData.model = glm::translate(uniformData.model, vec3(1.0, 0.0, 0.0));
+		uniformData.model = glm::scale(uniformData.model, vec3(0.5f));
+		queue.writeBuffer(uniformBuffer, offsetof(Uniforms, model), &uniformData.model, sizeof(mat4));
+
 
 		
 		TextureView nextFrame = swapChain.getCurrentTextureView();

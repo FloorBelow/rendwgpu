@@ -33,11 +33,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     let b = cos(uniforms.time);
 
     var out: VertexOutput;
-    out.position = vec4f(
-        in.position.x * a + in.position.y * b,
-        in.position.z,
-        (in.position.y * a - in.position.x * b) * 0.5 + 0.5,
-        1.0);
+    out.position = uniforms.proj * uniforms.view * uniforms.model * vec4<f32>(in.position, 1.0);
     out.color = in.color; // forward to the fragment shader
     return out;
 }
