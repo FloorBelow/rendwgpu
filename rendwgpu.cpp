@@ -20,6 +20,8 @@ using glm::mat4;
 #include "imgui\backends\imgui_impl_wgpu.h"
 #include "imgui\backends\imgui_impl_glfw.h"
 
+#include "granny2\include\granny.h"
+
 #include <cassert>
 #include <fstream>
 
@@ -111,6 +113,80 @@ WGPUDevice requestDevice(WGPUAdapter adapter, WGPUDeviceDescriptor const* descri
 
 int main()
 {
+	//jank granny testing stuff
+	granny_file* file = GrannyReadEntireFile("F:\\Extracted\\ESO\\sfpts\\model\\2774573.gr2");
+	granny_file_info* info = GrannyGetFileInfo(file);
+	cout << info->Meshes[0]->Name << endl;
+	granny_mesh* grannyMesh = info->Meshes[0];
+
+
+	//int grannyVertCount = grannyMesh->PrimaryVertexData->VertexCount;
+	//std::vector<float> grannyVertData(grannyVertCount * 6);
+	//GrannyCopyMeshVertices(grannyMesh, GrannyPN33VertexType, grannyVertData.data());
+	struct EsoVert {
+		float x; //4
+		float y; //8
+		float z; //12
+		char r;  //13
+		char g;  //14
+		char b;  //15
+		char a;  //16
+		short nx;//18
+		short ny;//20
+		short tx;//22
+		short ty;//24
+		short bx;//26
+		short by;//28
+		short u; //30
+		short v; //32
+	};
+
+	int vertCount = grannyMesh->PrimaryVertexData->VertexCount;
+	char* vertData = new char[vertCount * 32 + 128]; //extra padding
+	{
+		float* floatVertBuffer = (float*)vertData;
+		for (int i = 0; i < grannyMesh->PrimaryVertexData->VertexCount; i++) {
+			GrannyGetSingleVertex(grannyMesh->PrimaryVertexData, i, grannyMesh->PrimaryVertexData->VertexType, (void*)(vertData + 32 * i)); //does this fuck stuff up if it outputs to a too small buffer?
+			EsoVert* vert = (EsoVert*)(vertData + 32 * i);
+			vert->x = vert->x * -1;
+			bool inverted = false;
+			if (0 > vert->nx) {
+				vert->nx = vert->nx + 32768;
+				inverted = true;
+			}
+			if (0 > vert->ny) {
+				vert->ny = vert->ny + 32768;
+				inverted = true;
+			}
+			//vert->u = bx::halfFromFloat(vert->u / 1024.f);
+			//vert->v = bx::halfFromFloat(vert->v / -1024.f);
+
+
+			float fnormX = ((float)vert->nx) / -16384.f + 1.f;
+			float fnormY = ((float)vert->ny) / 16384.f - 1.f;
+			float fnormZ = std::sqrtf(1 - fnormX * fnormX - fnormY * fnormY);
+			if (inverted) fnormZ *= -1;
+			floatVertBuffer[i * 8 + 4] = fnormX;
+			floatVertBuffer[i * 8 + 5] = fnormY;
+			floatVertBuffer[i * 8 + 6] = fnormZ;
+
+			//std::cout << "TEST " << vert->x << " " << vert->y << " " << vert->z << " " << fnormX << " " << fnormY  << " " << fnormZ << "\n";
+		}
+	}
+
+
+
+	int grannyIdxCount = grannyMesh->PrimaryTopology->Index16Count;
+	std::vector<uint16_t> grannyIdxData(grannyIdxCount);
+	GrannyCopyMeshIndices(grannyMesh, 2, grannyIdxData.data());
+
+	//for (int i = 0; i < grannyIdxData.size(); i += 3) {
+	//	cout << grannyIdxData[i] << " " << grannyIdxData[i + 1] << " " << grannyIdxData[i + 2] << endl;
+	//}
+	GrannyFreeFile(file);
+
+
+
 	unsigned int windowWidth = 1600;
 	unsigned int windowHeight = 900;
 
@@ -157,7 +233,7 @@ int main()
 	deviceReqs.limits.maxVertexBuffers = 1;
 	deviceReqs.limits.maxInterStageShaderComponents = 3;
 	deviceReqs.limits.maxBufferSize = sizeof(Uniforms);
-	deviceReqs.limits.maxVertexBufferArrayStride = 6 * sizeof(float);
+	deviceReqs.limits.maxVertexBufferArrayStride = 32;
 	//alignments should use default values rather than zero
 	deviceReqs.limits.minUniformBufferOffsetAlignment = adapterLimits.limits.minUniformBufferOffsetAlignment;
 	deviceReqs.limits.minStorageBufferOffsetAlignment = adapterLimits.limits.minStorageBufferOffsetAlignment;
@@ -310,8 +386,8 @@ int main()
 
 	pipelineDescriptor.primitive.topology = PrimitiveTopology::TriangleList;
 	pipelineDescriptor.primitive.stripIndexFormat = IndexFormat::Undefined;
-	pipelineDescriptor.primitive.frontFace = FrontFace::CCW;
-	pipelineDescriptor.primitive.cullMode = CullMode::None;
+	pipelineDescriptor.primitive.frontFace = FrontFace::CW;
+	pipelineDescriptor.primitive.cullMode = CullMode::Back;
 
 	BlendState blendState;
 	blendState.color.srcFactor = BlendFactor::SrcAlpha;
@@ -378,6 +454,48 @@ int main()
 
 	pipelineDescriptor.layout = nullptr;
 
+	BufferDescriptor vBufferDesc;
+	vBufferDesc.size = vertCount * 32;
+	vBufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
+	vBufferDesc.mappedAtCreation = false;
+	vBufferDesc.label = "vertex buffer";
+	Buffer vBuffer = device.createBuffer(vBufferDesc);
+	queue.writeBuffer(vBuffer, 0, vertData, vBufferDesc.size);
+
+	//VERTEX BUFFER LAYOUT
+
+	VertexBufferLayout vBufferLayout;
+
+	std::vector<VertexAttribute> vBufferAttribs(2);
+	//position
+	vBufferAttribs[0].shaderLocation = 0;
+	vBufferAttribs[0].offset = 0;
+	vBufferAttribs[0].format = VertexFormat::Float32x3;
+	//color
+	vBufferAttribs[1].shaderLocation = 1;
+	vBufferAttribs[1].offset = 4 * sizeof(float);
+	vBufferAttribs[1].format = VertexFormat::Float32x3;
+
+	vBufferLayout.attributeCount = static_cast<uint32_t>(vBufferAttribs.size());
+	vBufferLayout.attributes = vBufferAttribs.data();
+	vBufferLayout.arrayStride = 32;
+	vBufferLayout.stepMode = VertexStepMode::Vertex;
+	pipelineDescriptor.vertex.bufferCount = 1;
+	pipelineDescriptor.vertex.buffers = &vBufferLayout;
+
+	//IDX BUFFER
+	BufferDescriptor idxBufferDesc;
+	//A writeBuffer operation must copy a number of bytes that is a multiple of 4. To ensure so we can switch bufferDesc.size for (bufferDesc.size + 3) & ~3.
+	idxBufferDesc.size = (grannyIdxCount * sizeof(uint16_t) + 3) & ~3;
+	idxBufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Index;
+	idxBufferDesc.mappedAtCreation = false;
+	idxBufferDesc.label = "idx buffer";
+	Buffer idxBuffer = device.createBuffer(idxBufferDesc);
+	queue.writeBuffer(idxBuffer, 0, grannyIdxData.data(), idxBufferDesc.size);
+
+
+	/*
+	//OLD TEST PYRAMID
 	//VERTEX BUFFER
 	std::vector<float> vertexData = {
 		-0.5f, -0.5f, -0.3f, 0.0f, 0.0f, 0.0f,
@@ -397,6 +515,7 @@ int main()
 	queue.writeBuffer(vBuffer, 0, vertexData.data(), vBufferDesc.size);
 
 	//VERTEX BUFFER LAYOUT
+
 	VertexBufferLayout vBufferLayout;
 
 	std::vector<VertexAttribute> vBufferAttribs(2);
@@ -434,6 +553,7 @@ int main()
 	idxBufferDesc.label = "idx buffer";
 	Buffer idxBuffer = device.createBuffer(idxBufferDesc);
 	queue.writeBuffer(idxBuffer, 0, idxData.data(), idxBufferDesc.size);
+	*/
 
 	//not just Time Uniform buffer
 	BufferDescriptor uniformBufferDesc;
@@ -487,7 +607,10 @@ int main()
 
 	//model
 
-	float modelPos[]{ 1.f, 0.f, 0.f };
+	float modelPos[]{ 0.f, 0.f, 0.f };
+	float modelRot[] = { 90.f, 0.f, 0.f };
+
+	float modelScale = 1.f;
 	uniformData.model = mat4(1);
 
 	uniformData.time = (float)glfwGetTime();
@@ -510,11 +633,16 @@ int main()
 
 		uniformData.time = (float)glfwGetTime();
 		queue.writeBuffer(uniformBuffer, offsetof(Uniforms, time), &uniformData.time, sizeof(float));
+		
 
-
-		uniformData.model = glm::rotate(mat4(1), uniformData.time, vec3(0.0, 0.0, 1.0));
+		uniformData.model = glm::rotate(mat4(1), uniformData.time, vec3(0.f, 0.f, 1.f));
 		uniformData.model = glm::translate(uniformData.model, vec3(modelPos[0], modelPos[1], modelPos[2]));
-		uniformData.model = glm::scale(uniformData.model, vec3(0.5f));
+		uniformData.model = glm::scale(uniformData.model, vec3(modelScale));
+		uniformData.model = glm::rotate(uniformData.model, glm::radians(modelRot[2]), vec3(0.f, 0.f, 1.f));
+		uniformData.model = glm::rotate(uniformData.model, glm::radians(modelRot[1]), vec3(0.f, 1.f, 0.f));
+		uniformData.model = glm::rotate(uniformData.model, glm::radians(modelRot[0]), vec3(1.f, 0.f, 0.f));
+
+
 		queue.writeBuffer(uniformBuffer, offsetof(Uniforms, model), &uniformData.model, sizeof(mat4));
 
 
@@ -563,10 +691,10 @@ int main()
 		CommandEncoder encoder = device.createCommandEncoder(encoderDescriptor);
 		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDescriptor);
 		renderPass.setPipeline(pipeline);
-		renderPass.setVertexBuffer(0, vBuffer, 0, vertexData.size() * sizeof(float));
-		renderPass.setIndexBuffer(idxBuffer, IndexFormat::Uint16, 0, idxData.size() * sizeof(uint16_t));
+		renderPass.setVertexBuffer(0, vBuffer, 0, vertCount * 32);
+		renderPass.setIndexBuffer(idxBuffer, IndexFormat::Uint16, 0, grannyIdxData.size() * sizeof(uint16_t));
 		renderPass.setBindGroup(0, uniformGroup, 0, nullptr);
-		renderPass.drawIndexed(idxCount, 1, 0, 0, 0);
+		renderPass.drawIndexed(grannyIdxCount, 1, 0, 0, 0);
 		//imgui
 		ImGui_ImplGlfw_NewFrame();
 		ImGui_ImplWGPU_NewFrame();
@@ -574,6 +702,8 @@ int main()
 
 		ImGui::Text("Test");
 		ImGui::InputFloat3("Position", modelPos);
+		ImGui::DragFloat3("Rotation", modelRot);
+		ImGui::DragFloat("Scale", &modelScale, 0.01f);
 		ImGui::Render();
 		ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
 		renderPass.end();
