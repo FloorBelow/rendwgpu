@@ -16,6 +16,10 @@
 using glm::vec3;
 using glm::mat4;
 
+#include "imgui\imgui.h"
+#include "imgui\backends\imgui_impl_wgpu.h"
+#include "imgui\backends\imgui_impl_glfw.h"
+
 #include <cassert>
 #include <fstream>
 
@@ -126,6 +130,7 @@ int main()
 		return 1;
 	}
 
+
 	//INSTANCE
 	Instance instance = wgpu::createInstance(InstanceDescriptor());
 
@@ -136,8 +141,12 @@ int main()
 	adapterOptions.compatibleSurface = surface;
 	Adapter adapter = instance.requestAdapter(adapterOptions);
 
-	
 
+	AdapterProperties adapterProperties;
+	adapter.getProperties(&adapterProperties);
+	std::cout << " - Backend: " << adapterProperties.backendType << std::endl;
+
+	
 	
 	//DEVICE
 	SupportedLimits adapterLimits;
@@ -160,6 +169,44 @@ int main()
 
 	deviceReqs.limits.maxTextureDimension2D = 2048;
 	deviceReqs.limits.maxTextureArrayLayers = 1;
+
+	//for imgui
+	deviceReqs.limits.maxBufferSize = 268435456; //default
+	deviceReqs.limits.maxVertexAttributes = 3;
+	deviceReqs.limits.maxInterStageShaderComponents = 6;
+	deviceReqs.limits.maxBindGroups = 2;
+	deviceReqs.limits.maxSampledTexturesPerShaderStage = 1;
+	deviceReqs.limits.maxSamplersPerShaderStage = 1;
+
+	/*BACKUP
+	deviceReqs.limits.maxTextureDimension1D = adapterLimits.limits.maxTextureDimension1D;
+	deviceReqs.limits.maxTextureDimension2D = adapterLimits.limits.maxTextureDimension2D;
+	deviceReqs.limits.maxTextureDimension3D = adapterLimits.limits.maxTextureDimension3D;
+	deviceReqs.limits.maxTextureArrayLayers = adapterLimits.limits.maxTextureArrayLayers;
+	deviceReqs.limits.maxBindGroups = adapterLimits.limits.maxBindGroups;
+	deviceReqs.limits.maxDynamicUniformBuffersPerPipelineLayout = adapterLimits.limits.maxDynamicUniformBuffersPerPipelineLayout;
+	deviceReqs.limits.maxDynamicStorageBuffersPerPipelineLayout = adapterLimits.limits.maxDynamicStorageBuffersPerPipelineLayout;
+	deviceReqs.limits.maxSampledTexturesPerShaderStage = adapterLimits.limits.maxSampledTexturesPerShaderStage;
+	deviceReqs.limits.maxSamplersPerShaderStage = adapterLimits.limits.maxSamplersPerShaderStage;
+	deviceReqs.limits.maxStorageBuffersPerShaderStage = adapterLimits.limits.maxStorageBuffersPerShaderStage;
+	deviceReqs.limits.maxStorageTexturesPerShaderStage = adapterLimits.limits.maxStorageTexturesPerShaderStage;
+	deviceReqs.limits.maxUniformBuffersPerShaderStage = adapterLimits.limits.maxUniformBuffersPerShaderStage;
+	deviceReqs.limits.maxUniformBufferBindingSize = adapterLimits.limits.maxUniformBufferBindingSize;
+	deviceReqs.limits.maxStorageBufferBindingSize = adapterLimits.limits.maxStorageBufferBindingSize;
+	deviceReqs.limits.minUniformBufferOffsetAlignment = adapterLimits.limits.minUniformBufferOffsetAlignment;
+	deviceReqs.limits.minStorageBufferOffsetAlignment = adapterLimits.limits.minStorageBufferOffsetAlignment;
+	deviceReqs.limits.maxVertexBuffers = adapterLimits.limits.maxVertexBuffers;
+	deviceReqs.limits.maxVertexAttributes = adapterLimits.limits.maxVertexAttributes;
+	deviceReqs.limits.maxVertexBufferArrayStride = adapterLimits.limits.maxVertexBufferArrayStride;
+	deviceReqs.limits.maxInterStageShaderComponents = adapterLimits.limits.maxInterStageShaderComponents;
+	deviceReqs.limits.maxComputeWorkgroupStorageSize = adapterLimits.limits.maxComputeWorkgroupStorageSize;
+	deviceReqs.limits.maxComputeInvocationsPerWorkgroup = adapterLimits.limits.maxComputeInvocationsPerWorkgroup;
+	deviceReqs.limits.maxComputeWorkgroupSizeX = adapterLimits.limits.maxComputeWorkgroupSizeX;
+	deviceReqs.limits.maxComputeWorkgroupSizeY = adapterLimits.limits.maxComputeWorkgroupSizeY;
+	deviceReqs.limits.maxComputeWorkgroupSizeZ = adapterLimits.limits.maxComputeWorkgroupSizeZ;
+	deviceReqs.limits.maxComputeWorkgroupsPerDimension = adapterLimits.limits.maxComputeWorkgroupsPerDimension;
+	*/
+
 
 	DeviceDescriptor deviceDescriptor;
 	deviceDescriptor.label = "Default Device";
@@ -426,25 +473,34 @@ int main()
 	Uniforms uniformData;
 
 
-	//where can i find an actual pi
-	const float PI = 3.141592654f;
 
 	//proj
 	float near = 0.001f;
 	float far = 100.0f;
 	float ratio = ((float)windowWidth) / ((float)windowHeight);
-	float fov = 45 * PI / 180;
+	float fov = glm::radians(45.f);
 	uniformData.proj = glm::perspective(fov, ratio, near, far);
 
 	//view
 	uniformData.view = glm::translate(mat4(1), vec3(0, 0, -3));
-	uniformData.view = glm::rotate(uniformData.view, -60 * PI / 180, vec3(1, 0, 0));
+	uniformData.view = glm::rotate(uniformData.view, glm::radians(-60.f), vec3(1, 0, 0));
 
 	//model
+
+	float modelPos[]{ 1.f, 0.f, 0.f };
 	uniformData.model = mat4(1);
 
 	uniformData.time = (float)glfwGetTime();
 	queue.writeBuffer(uniformBuffer, 0, &uniformData, sizeof(Uniforms));
+
+
+
+	//IMGUI
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io; //????
+	ImGui_ImplGlfw_InitForOther(window, true);
+	ImGui_ImplWGPU_Init(device, 3, swapChainFormat, depthTextureFormat);
 
 
 	cout << "Hello CMake." << endl;
@@ -457,7 +513,7 @@ int main()
 
 
 		uniformData.model = glm::rotate(mat4(1), uniformData.time, vec3(0.0, 0.0, 1.0));
-		uniformData.model = glm::translate(uniformData.model, vec3(1.0, 0.0, 0.0));
+		uniformData.model = glm::translate(uniformData.model, vec3(modelPos[0], modelPos[1], modelPos[2]));
 		uniformData.model = glm::scale(uniformData.model, vec3(0.5f));
 		queue.writeBuffer(uniformBuffer, offsetof(Uniforms, model), &uniformData.model, sizeof(mat4));
 
@@ -468,7 +524,7 @@ int main()
 			std::cerr << "Cannot acquire next swap chain texture" << std::endl;
 			break;
 		}
-		std::cout << "next frame: " << nextFrame << std::endl;
+		//std::cout << "next frame: " << nextFrame << std::endl;
 
 
 
@@ -511,6 +567,15 @@ int main()
 		renderPass.setIndexBuffer(idxBuffer, IndexFormat::Uint16, 0, idxData.size() * sizeof(uint16_t));
 		renderPass.setBindGroup(0, uniformGroup, 0, nullptr);
 		renderPass.drawIndexed(idxCount, 1, 0, 0, 0);
+		//imgui
+		ImGui_ImplGlfw_NewFrame();
+		ImGui_ImplWGPU_NewFrame();
+		ImGui::NewFrame();
+
+		ImGui::Text("Test");
+		ImGui::InputFloat3("Position", modelPos);
+		ImGui::Render();
+		ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
 		renderPass.end();
 
 		wgpuTextureViewDrop(nextFrame);
