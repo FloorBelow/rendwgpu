@@ -6,6 +6,7 @@ public:
     int vertBufferSize;
     int idxBufferSize;
 	int idxCount;
+	bool idx32;
 
     wgpu::Buffer vertBuffer = nullptr;
 	wgpu::Buffer idxBuffer = nullptr;
@@ -17,7 +18,7 @@ public:
 
 private:
 	char* vertData;
-	std::vector<uint16_t> idxData;
+	char* idxData;
 
 
 	struct EsoVert {

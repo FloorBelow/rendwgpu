@@ -382,7 +382,8 @@ int main()
 	pipelineDescriptor.layout = nullptr;
 
 	
-	Model model("F:\\Extracted\\ESO\\sfpts\\model\\2774573.gr2", device, queue);
+	Model model("F:\\Extracted\\ESO\\sfpts\\model\\1520043.gr2", device, queue); //elstemple
+	//Model model("F:\\Extracted\\ESO\\sfpts\\model\\2774573.gr2", device, queue); //bendu
 	pipelineDescriptor.vertex.bufferCount = 1;
 	pipelineDescriptor.vertex.buffers = &model.vertLayout;
 
@@ -589,7 +590,7 @@ int main()
 		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDescriptor);
 		renderPass.setPipeline(pipeline);
 		renderPass.setVertexBuffer(0, model.vertBuffer, 0, model.vertBufferSize);
-		renderPass.setIndexBuffer(model.idxBuffer, IndexFormat::Uint16, 0, model.idxBufferSize);
+		renderPass.setIndexBuffer(model.idxBuffer, model.idx32 ? IndexFormat::Uint32 : IndexFormat::Uint16, 0, model.idxBufferSize);
 		renderPass.setBindGroup(0, uniformGroup, 0, nullptr);
 		renderPass.drawIndexed(model.idxCount, 1, 0, 0, 0);
 		//imgui

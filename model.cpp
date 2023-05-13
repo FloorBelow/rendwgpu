@@ -48,11 +48,22 @@ Model::Model(const char* path, Device& device, Queue& queue) {
 		}
 	}
 
+	if (grannyMesh->PrimaryTopology->IndexCount > 0) {
+		idx32 = true;
+		idxCount = grannyMesh->PrimaryTopology->IndexCount;
+		idxBufferSize = (idxCount * sizeof(uint32_t) + 3) & ~3;
+		idxData = new char[idxBufferSize];
+		GrannyCopyMeshIndices(grannyMesh, 4, idxData);
+	}
+	else {
+		idx32 = false;
+		idxCount = grannyMesh->PrimaryTopology->Index16Count;
+		idxBufferSize = (idxCount * sizeof(uint16_t) + 3) & ~3;
+		idxData = new char[idxBufferSize];
+		GrannyCopyMeshIndices(grannyMesh, 2, idxData);
+	}
 
-
-	idxCount = grannyMesh->PrimaryTopology->Index16Count;
-	idxData = std::vector<uint16_t>(idxCount);
-	GrannyCopyMeshIndices(grannyMesh, 2, idxData.data());
+	
 
 	//for (int i = 0; i < grannyIdxData.size(); i += 3) {
 	//	cout << grannyIdxData[i] << " " << grannyIdxData[i + 1] << " " << grannyIdxData[i + 2] << endl;
@@ -89,15 +100,13 @@ Model::Model(const char* path, Device& device, Queue& queue) {
 	//IDX BUFFER
 	BufferDescriptor idxBufferDesc;
 	//A writeBuffer operation must copy a number of bytes that is a multiple of 4. To ensure so we can switch bufferDesc.size for (bufferDesc.size + 3) & ~3.
-	idxBufferDesc.size = (idxCount * sizeof(uint16_t) + 3) & ~3;
+	idxBufferDesc.size = idxBufferSize;
 	idxBufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Index;
 	idxBufferDesc.mappedAtCreation = false;
 	idxBufferDesc.label = "idx buffer";
 	this->idxBuffer = device.createBuffer(idxBufferDesc);
-	queue.writeBuffer(idxBuffer, 0, idxData.data(), idxBufferDesc.size);
-
+	queue.writeBuffer(idxBuffer, 0, idxData, idxBufferSize);
 	this->vertBufferSize = vertCount * 32;
-	this->idxBufferSize = (int)idxData.size() * sizeof(uint16_t);
 	
 
 }
