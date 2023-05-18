@@ -32,9 +32,9 @@ using namespace wgpu;
 struct Uniforms {
 	mat4 proj;
 	mat4 view;
-	mat4 model;
 	float time;
-	float padding[3];
+	float rotationSpeed;
+	float padding[2];
 };
 
 WGPUAdapter requestAdapter(WGPUInstance instance, WGPURequestAdapterOptions const* options) {
@@ -114,9 +114,10 @@ WGPUDevice requestDevice(WGPUAdapter adapter, WGPUDeviceDescriptor const* descri
 
 int main()
 {
-	unsigned int windowWidth = 1600;
-	unsigned int windowHeight = 900;
+	unsigned int windowWidth = 800;
+	unsigned int windowHeight = 450;
 
+	cout << "TEST SIZE OF UNIFORMS " << sizeof(Uniforms) << endl;
 
 	glfwInit();
 	if (!glfwInit()) {
@@ -181,7 +182,8 @@ int main()
 	deviceReqs.limits.maxSampledTexturesPerShaderStage = 1;
 	deviceReqs.limits.maxSamplersPerShaderStage = 1;
 
-	/*BACKUP
+	//BACKUP
+
 	deviceReqs.limits.maxTextureDimension1D = adapterLimits.limits.maxTextureDimension1D;
 	deviceReqs.limits.maxTextureDimension2D = adapterLimits.limits.maxTextureDimension2D;
 	deviceReqs.limits.maxTextureDimension3D = adapterLimits.limits.maxTextureDimension3D;
@@ -208,7 +210,7 @@ int main()
 	deviceReqs.limits.maxComputeWorkgroupSizeY = adapterLimits.limits.maxComputeWorkgroupSizeY;
 	deviceReqs.limits.maxComputeWorkgroupSizeZ = adapterLimits.limits.maxComputeWorkgroupSizeZ;
 	deviceReqs.limits.maxComputeWorkgroupsPerDimension = adapterLimits.limits.maxComputeWorkgroupsPerDimension;
-	*/
+	
 
 
 	DeviceDescriptor deviceDescriptor;
@@ -379,118 +381,85 @@ int main()
 	pipelineDescriptor.multisample.mask = ~0u;
 	pipelineDescriptor.multisample.alphaToCoverageEnabled = false;
 
-	pipelineDescriptor.layout = nullptr;
+
 
 	
-	Model model("F:\\Extracted\\ESO\\sfpts\\model\\1520043.gr2", device, queue); //elstemple
-	//Model model("F:\\Extracted\\ESO\\sfpts\\model\\2774573.gr2", device, queue); //bendu
+	//Model model("F:\\Extracted\\ESO\\sfpts\\model\\1520043.gr2", device, queue); //elstemple
+	Model model("F:\\Extracted\\ESO\\sfpts\\model\\2774573.gr2", device, queue); //bendu
 	pipelineDescriptor.vertex.bufferCount = 1;
 	pipelineDescriptor.vertex.buffers = &model.vertLayout;
 
-
-	//VERTEX BUFFER LAYOUT
-
+	
 
 
-	/*
-	//OLD TEST PYRAMID
-	//VERTEX BUFFER
-	std::vector<float> vertexData = {
-		-0.5f, -0.5f, -0.3f, 0.0f, 0.0f, 0.0f,
-		+0.5f, -0.5f, -0.3f, 1.0f, 0.0f, 0.0f,
-		+0.5f, +0.5f, -0.3f, 1.0f, 1.0f, 0.0f,
-		-0.5f, +0.5f, -0.3f, 0.0f, 1.0f, 0.0f,
-		+0.0f, +0.0f, +0.5f, 0.5f, 0.5f, 1.0f,
-	};
-	int vertexCount = static_cast<int>(vertexData.size() / 6);
 
-	BufferDescriptor vBufferDesc;
-	vBufferDesc.size = vertexData.size() * sizeof(float);
-	vBufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
-	vBufferDesc.mappedAtCreation = false;
-	vBufferDesc.label = "vertex buffer";
-	Buffer vBuffer = device.createBuffer(vBufferDesc);
-	queue.writeBuffer(vBuffer, 0, vertexData.data(), vBufferDesc.size);
+	std::vector<BindGroupLayoutEntry> uniformLayoutEntries(2, Default);
+	//global uniform layout
+	uniformLayoutEntries[0].binding = 0;
+	uniformLayoutEntries[0].visibility = ShaderStage::Vertex;
+	uniformLayoutEntries[0].buffer.type = BufferBindingType::Uniform;
+	uniformLayoutEntries[0].buffer.minBindingSize = sizeof(Uniforms);
+	//instance uniform layout
+	uniformLayoutEntries[1].binding = 1;
+	uniformLayoutEntries[1].visibility = ShaderStage::Vertex;
+	uniformLayoutEntries[1].buffer.type = BufferBindingType::Uniform;
+	uniformLayoutEntries[1].buffer.minBindingSize = sizeof(mat4);
+	//bindgroup layout
+	BindGroupLayoutDescriptor uniformLayoutDesc;
+	uniformLayoutDesc.entryCount = 2;
+	uniformLayoutDesc.entries = uniformLayoutEntries.data();
+	BindGroupLayout uniformLayout = device.createBindGroupLayout(uniformLayoutDesc);
 
-	//VERTEX BUFFER LAYOUT
 
-	VertexBufferLayout vBufferLayout;
-
-	std::vector<VertexAttribute> vBufferAttribs(2);
-	//position
-	vBufferAttribs[0].shaderLocation = 0;
-	vBufferAttribs[0].offset = 0;
-	vBufferAttribs[0].format = VertexFormat::Float32x3;
-	//color
-	vBufferAttribs[1].shaderLocation = 1;
-	vBufferAttribs[1].offset = 3 * sizeof(float);
-	vBufferAttribs[1].format = VertexFormat::Float32x3;
-
-	vBufferLayout.attributeCount = static_cast<uint32_t>(vBufferAttribs.size());
-	vBufferLayout.attributes = vBufferAttribs.data();
-	vBufferLayout.arrayStride = 6 * sizeof(float);
-	vBufferLayout.stepMode = VertexStepMode::Vertex;
-	pipelineDescriptor.vertex.bufferCount = 1;
-	pipelineDescriptor.vertex.buffers = &vBufferLayout;
-
-	//IDX BUFFER
-	std::vector<uint16_t> idxData = {
-		0, 1, 2,
-		0, 2, 3,
-		0, 1, 4,
-		1, 2, 4,
-		2, 3, 4,
-		3, 0, 4
-	};
-	int idxCount = static_cast<int>(idxData.size());
-	BufferDescriptor idxBufferDesc;
-	//A writeBuffer operation must copy a number of bytes that is a multiple of 4. To ensure so we can switch bufferDesc.size for (bufferDesc.size + 3) & ~3.
-	idxBufferDesc.size = (idxCount * sizeof(uint16_t) + 3) & ~3;
-	idxBufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Index;
-	idxBufferDesc.mappedAtCreation = false;
-	idxBufferDesc.label = "idx buffer";
-	Buffer idxBuffer = device.createBuffer(idxBufferDesc);
-	queue.writeBuffer(idxBuffer, 0, idxData.data(), idxBufferDesc.size);
-	*/
-
-	//not just Time Uniform buffer
+	//global uniform buffer
 	BufferDescriptor uniformBufferDesc;
 	uniformBufferDesc.size = sizeof(Uniforms);
 	uniformBufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
 	uniformBufferDesc.mappedAtCreation = false;
 	uniformBufferDesc.label = "uniform buffer";
 	Buffer uniformBuffer = device.createBuffer(uniformBufferDesc);
+	//instance uniform buffer
+	BufferDescriptor instanceBufferDesc;
+	instanceBufferDesc.size = sizeof(mat4);
+	instanceBufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
+	instanceBufferDesc.mappedAtCreation = false;
+	instanceBufferDesc.label = "instance buffer";
+	Buffer instanceBuffer = device.createBuffer(instanceBufferDesc);
+	
 
-	//Uniform bind group layout
-	BindGroupLayoutEntry uniformLayoutEntry;// = Default; //TODO what happens if this isnt here
-	uniformLayoutEntry.binding = 0;
-	uniformLayoutEntry.visibility = ShaderStage::Vertex;
-	uniformLayoutEntry.buffer.type = BufferBindingType::Uniform;
-	uniformLayoutEntry.buffer.minBindingSize = sizeof(Uniforms);
-
-	BindGroupLayoutDescriptor uniformLayoutDesc;
-	uniformLayoutDesc.entryCount = 1;
-	uniformLayoutDesc.entries = &uniformLayoutEntry;
-	BindGroupLayout uniformLayout = device.createBindGroupLayout(uniformLayoutDesc);
-
-	//uniform bind group
-	BindGroupEntry uniformGroupEntry;
-	uniformGroupEntry.binding = 0;
-	uniformGroupEntry.buffer = uniformBuffer;
-	uniformGroupEntry.offset = 0;
-	uniformGroupEntry.size = sizeof(Uniforms);
-
+	std::vector<BindGroupEntry> uniformEntries(2, Default);
+	//global uniform binding
+	uniformEntries[0].binding = 0;
+	uniformEntries[0].buffer = uniformBuffer;
+	uniformEntries[0].offset = 0;
+	uniformEntries[0].size = sizeof(Uniforms);
+	//instance uniform binding
+	uniformEntries[1].binding = 1;
+	uniformEntries[1].buffer = instanceBuffer;
+	uniformEntries[1].offset = 0;
+	uniformEntries[1].size = sizeof(mat4);
+	//bindgroup
 	BindGroupDescriptor uniformGroupDesc;
 	uniformGroupDesc.layout = uniformLayout;
-	uniformGroupDesc.entryCount = 1;
-	uniformGroupDesc.entries = &uniformGroupEntry;
+	uniformGroupDesc.entryCount = 2;
+	uniformGroupDesc.entries = uniformEntries.data();
 	BindGroup uniformGroup = device.createBindGroup(uniformGroupDesc);
+
+
+
+
+	PipelineLayoutDescriptor layoutDesc;
+	layoutDesc.bindGroupLayoutCount = 1;
+	layoutDesc.bindGroupLayouts = &(WGPUBindGroupLayout)uniformLayout;
+	PipelineLayout layout = device.createPipelineLayout(layoutDesc);
+	pipelineDescriptor.layout = layout;
+	//pipelineDescriptor.layout = nullptr;
 
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDescriptor);
 
+
 	Uniforms uniformData;
-
-
+	mat4 instanceData = mat4(1);
 
 	//proj
 	float near = 0.001f;
@@ -509,10 +478,12 @@ int main()
 	float modelRot[] = { 90.f, 0.f, 0.f };
 
 	float modelScale = 1.f;
-	uniformData.model = mat4(1);
 
 	uniformData.time = (float)glfwGetTime();
+	uniformData.rotationSpeed = 1.0f;
 	queue.writeBuffer(uniformBuffer, 0, &uniformData, sizeof(Uniforms));
+
+	queue.writeBuffer(instanceBuffer, 0, &instanceData, sizeof(mat4));
 
 
 
@@ -530,18 +501,19 @@ int main()
 		glfwPollEvents();
 
 		uniformData.time = (float)glfwGetTime();
-		queue.writeBuffer(uniformBuffer, offsetof(Uniforms, time), &uniformData.time, sizeof(float));
-		
-
-		uniformData.model = glm::rotate(mat4(1), uniformData.time, vec3(0.f, 0.f, 1.f));
-		uniformData.model = glm::translate(uniformData.model, vec3(modelPos[0], modelPos[1], modelPos[2]));
-		uniformData.model = glm::scale(uniformData.model, vec3(modelScale));
-		uniformData.model = glm::rotate(uniformData.model, glm::radians(modelRot[2]), vec3(0.f, 0.f, 1.f));
-		uniformData.model = glm::rotate(uniformData.model, glm::radians(modelRot[1]), vec3(0.f, 1.f, 0.f));
-		uniformData.model = glm::rotate(uniformData.model, glm::radians(modelRot[0]), vec3(1.f, 0.f, 0.f));
+		queue.writeBuffer(uniformBuffer, offsetof(Uniforms, time), &uniformData.time, sizeof(float) * 2); //also updating rotation speed
 
 
-		queue.writeBuffer(uniformBuffer, offsetof(Uniforms, model), &uniformData.model, sizeof(mat4));
+		instanceData = glm::rotate(mat4(1), uniformData.time * uniformData.rotationSpeed, vec3(0.f, 0.f, 1.f));
+		instanceData = glm::translate(instanceData, vec3(modelPos[0], modelPos[1], modelPos[2]));
+		instanceData = glm::scale(instanceData, vec3(modelScale));
+		instanceData = glm::rotate(instanceData, glm::radians(modelRot[2]), vec3(0.f, 0.f, 1.f));
+		instanceData = glm::rotate(instanceData, glm::radians(modelRot[1]), vec3(0.f, 1.f, 0.f));
+		instanceData = glm::rotate(instanceData, glm::radians(modelRot[0]), vec3(1.f, 0.f, 0.f));
+
+
+		//queue.writeBuffer(uniformBuffer, offsetof(Uniforms, model), &uniformData.model, sizeof(mat4));
+		queue.writeBuffer(instanceBuffer, 0, &instanceData, sizeof(mat4)); //also updating rotation speed
 
 
 		
@@ -589,9 +561,9 @@ int main()
 		CommandEncoder encoder = device.createCommandEncoder(encoderDescriptor);
 		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDescriptor);
 		renderPass.setPipeline(pipeline);
+		renderPass.setBindGroup(0, uniformGroup, 0, nullptr);
 		renderPass.setVertexBuffer(0, model.vertBuffer, 0, model.vertBufferSize);
 		renderPass.setIndexBuffer(model.idxBuffer, model.idx32 ? IndexFormat::Uint32 : IndexFormat::Uint16, 0, model.idxBufferSize);
-		renderPass.setBindGroup(0, uniformGroup, 0, nullptr);
 		renderPass.drawIndexed(model.idxCount, 1, 0, 0, 0);
 		//imgui
 		ImGui_ImplGlfw_NewFrame();
@@ -599,9 +571,10 @@ int main()
 		ImGui::NewFrame();
 
 		ImGui::Text("Test");
-		ImGui::InputFloat3("Position", modelPos);
+		ImGui::DragFloat3("Position", modelPos, 0.01f);
 		ImGui::DragFloat3("Rotation", modelRot);
 		ImGui::DragFloat("Scale", &modelScale, 0.01f);
+		ImGui::DragFloat("Speed", &uniformData.rotationSpeed, 0.01f);
 		ImGui::Render();
 		ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
 		renderPass.end();
