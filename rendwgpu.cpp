@@ -409,7 +409,7 @@ int main()
 
 	
 
-	int instanceCount = 2;
+	int instanceCount = 32;
 
 	//create instance vert buffer
 	BufferDescriptor instanceVertBufferDesc;
@@ -497,6 +497,8 @@ int main()
 	Uniforms uniformData;
 	vector<mat4> instanceData(instanceCount);
 	for (int i = 0; i < instanceData.size(); i++) instanceData[i] = mat4(1);
+	queue.writeBuffer(instanceVertBuffer, 0, instanceData.data(), instanceCount * sizeof(mat4)); //also updating rotation speed
+
 
 	//proj
 	float near = 0.001f;
@@ -537,20 +539,14 @@ int main()
 		uniformData.time = (float)glfwGetTime();
 		queue.writeBuffer(uniformBuffer, offsetof(Uniforms, time), &uniformData.time, sizeof(float) * 2); //also updating rotation speed
 
-
-		instanceData[0] = glm::rotate(mat4(1), uniformData.time * uniformData.rotationSpeed, vec3(0.f, 0.f, 1.f));
-		instanceData[0] = glm::translate(instanceData[0], vec3(modelPos[0], modelPos[1], modelPos[2]));
-		instanceData[0] = glm::scale(instanceData[0], vec3(modelScale));
-		instanceData[0] = glm::rotate(instanceData[0], glm::radians(modelRot[2]), vec3(0.f, 0.f, 1.f));
-		instanceData[0] = glm::rotate(instanceData[0], glm::radians(modelRot[1]), vec3(0.f, 1.f, 0.f));
-		instanceData[0] = glm::rotate(instanceData[0], glm::radians(modelRot[0]), vec3(1.f, 0.f, 0.f));
-
-		instanceData[1] = glm::rotate(mat4(1), uniformData.time * uniformData.rotationSpeed, vec3(0.f, 0.f, 1.f));
-		instanceData[1] = glm::translate(instanceData[1], vec3(modelPos[0] * -1, modelPos[1], modelPos[2]));
-		instanceData[1] = glm::scale(instanceData[1], vec3(modelScale));
-		instanceData[1] = glm::rotate(instanceData[1], glm::radians(modelRot[2]), vec3(0.f, 0.f, 1.f));
-		instanceData[1] = glm::rotate(instanceData[1], glm::radians(modelRot[1]), vec3(0.f, 1.f, 0.f));
-		instanceData[1] = glm::rotate(instanceData[1], glm::radians(modelRot[0]), vec3(1.f, 0.f, 0.f));
+		for (int i = 0; i < instanceCount; i++) {
+			instanceData[i] = glm::rotate(mat4(1), uniformData.time * uniformData.rotationSpeed + glm::two_pi<float>() / instanceCount * i, vec3(0.f, 0.f, 1.f));
+			instanceData[i] = glm::translate(instanceData[i], vec3(modelPos[0], modelPos[1], modelPos[2]));
+			instanceData[i] = glm::scale(instanceData[i], vec3(modelScale));
+			instanceData[i] = glm::rotate(instanceData[i], glm::radians(modelRot[2]), vec3(0.f, 0.f, 1.f));
+			instanceData[i] = glm::rotate(instanceData[i], glm::radians(modelRot[1]), vec3(0.f, 1.f, 0.f));
+			instanceData[i] = glm::rotate(instanceData[i], glm::radians(modelRot[0]), vec3(1.f, 0.f, 0.f));
+		}
 
 		//queue.writeBuffer(uniformBuffer, offsetof(Uniforms, model), &uniformData.model, sizeof(mat4));
 		queue.writeBuffer(instanceVertBuffer, 0, instanceData.data(), instanceCount * sizeof(mat4)); //also updating rotation speed
@@ -606,7 +602,7 @@ int main()
 		renderPass.setVertexBuffer(1, instanceVertBuffer, 0, instanceCount * sizeof(mat4));
 
 		renderPass.setIndexBuffer(model.idxBuffer, model.idx32 ? IndexFormat::Uint32 : IndexFormat::Uint16, 0, model.idxBufferSize);
-		renderPass.drawIndexed(model.idxCount, 2, 0, 0, 0);
+		renderPass.drawIndexed(model.idxCount, instanceCount, 0, 0, 0);
 		//imgui
 		ImGui_ImplGlfw_NewFrame();
 		ImGui_ImplWGPU_NewFrame();
