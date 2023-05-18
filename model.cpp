@@ -76,24 +76,6 @@ Model::Model(const char* path, Device& device, Queue& queue) {
 	vBufferDesc.mappedAtCreation = false;
 	vBufferDesc.label = "vertex buffer";
 	this->vertBuffer = device.createBuffer(vBufferDesc);
-
-
-	this->vertAttributes = std::vector<wgpu::VertexAttribute>(2);
-	//position
-	vertAttributes[0].shaderLocation = 0;
-	vertAttributes[0].offset = 0;
-	vertAttributes[0].format = VertexFormat::Float32x3;
-	//color
-	vertAttributes[1].shaderLocation = 1;
-	vertAttributes[1].offset = 4 * sizeof(float);
-	vertAttributes[1].format = VertexFormat::Float32x3;
-
-	vertLayout;
-	vertLayout.attributeCount = static_cast<uint32_t>(vertAttributes.size());
-	vertLayout.attributes = vertAttributes.data();
-	vertLayout.arrayStride = 32;
-	vertLayout.stepMode = VertexStepMode::Vertex;
-
 	queue.writeBuffer(vertBuffer, 0, vertData, vBufferDesc.size);
 
 

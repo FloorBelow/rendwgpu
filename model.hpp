@@ -3,18 +3,17 @@
 struct Model {
 public:
     //idx buffers have to be a mult of 16 so this is neccecary, to tell in the render pass how much to use from each buffer
-    int vertBufferSize;
-    int idxBufferSize;
+	int vertBufferSize;
+	int idxBufferSize;
 	int idxCount;
 	bool idx32;
 
-    wgpu::Buffer vertBuffer = nullptr;
+	wgpu::Buffer vertBuffer = nullptr;
 	wgpu::Buffer idxBuffer = nullptr;
 
-	wgpu::VertexBufferLayout vertLayout;
 	std::vector<wgpu::VertexAttribute> vertAttributes;
 
-    Model(const char* path, wgpu::Device& device, wgpu::Queue& queue);
+	Model(const char* path, wgpu::Device& device, wgpu::Queue& queue);
 
 private:
 	char* vertData;
