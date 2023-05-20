@@ -92,3 +92,8 @@ Model::Model(const char* path, Device& device, Queue& queue) {
 	
 
 }
+
+Model::~Model() {
+	vertBuffer.drop();
+	idxBuffer.drop();
+}

@@ -25,6 +25,7 @@ using glm::mat4;
 #include <fstream>
 
 #include "model.hpp"
+#include "wgpuUtil.hpp"
 
 using namespace std;
 using namespace wgpu;
@@ -112,10 +113,44 @@ WGPUDevice requestDevice(WGPUAdapter adapter, WGPUDeviceDescriptor const* descri
 	return userData.device;
 }
 
+ShaderModule CreateShader(Device& device, const char* path) {
+	ShaderModuleDescriptor shaderDescriptor;
+	shaderDescriptor.hintCount = 0;
+	shaderDescriptor.hints = nullptr;
+	ShaderModuleWGSLDescriptor shaderCodeDescriptor;
+	shaderCodeDescriptor.chain.next = nullptr;
+	shaderCodeDescriptor.chain.sType = SType::ShaderModuleWGSLDescriptor;
+
+	ifstream shaderFileStream;
+	shaderFileStream.open(path);
+	shaderFileStream.seekg(0, std::ios_base::end);
+	int shaderTextLength = (int)shaderFileStream.tellg();
+	shaderFileStream.seekg(0);
+	std::vector<char> shaderText(shaderTextLength);
+	shaderFileStream.read(shaderText.data(), shaderTextLength);
+	shaderFileStream.close();
+	shaderCodeDescriptor.code = shaderText.data();
+	shaderDescriptor.nextInChain = &shaderCodeDescriptor.chain;
+	return device.createShaderModule(shaderDescriptor);
+}
+
+SwapChainDescriptor DescribeSwapChain(int width, int height, TextureFormat format) {
+	SwapChainDescriptor swapChainDescriptor;
+	swapChainDescriptor.width = width;
+	swapChainDescriptor.height = height;
+	swapChainDescriptor.format = format;
+	swapChainDescriptor.usage = WGPUTextureUsage_RenderAttachment;
+	swapChainDescriptor.presentMode = WGPUPresentMode_Mailbox;
+	return swapChainDescriptor;
+}
+
+
 int main()
 {
-	unsigned int windowWidth = 800;
-	unsigned int windowHeight = 450;
+	unsigned int windowWidth = 1920;
+	unsigned int windowHeight = 1080;
+	int instanceCount = 64;
+
 
 	cout << "TEST SIZE OF UNIFORMS " << sizeof(Uniforms) << endl;
 
@@ -138,19 +173,13 @@ int main()
 	//INSTANCE
 	Instance instance = wgpu::createInstance(InstanceDescriptor());
 
+
 	Surface surface = glfwGetWGPUSurface(instance, window);
 	 
 	//ADAPTER
 	RequestAdapterOptions adapterOptions;
 	adapterOptions.compatibleSurface = surface;
 	Adapter adapter = instance.requestAdapter(adapterOptions);
-
-
-	AdapterProperties adapterProperties;
-	adapter.getProperties(&adapterProperties);
-	std::cout << " - Backend: " << adapterProperties.backendType << std::endl;
-
-	
 	
 	//DEVICE
 	SupportedLimits adapterLimits;
@@ -220,38 +249,7 @@ int main()
 	deviceDescriptor.defaultQueue.label = "Default Queue";
 	Device device = adapter.requestDevice(deviceDescriptor);
 
-	SupportedLimits limits;
-	bool success = device.getLimits(&limits);
-	if (success) {
-		std::cout << "Device limits:" << std::endl;
-		std::cout << " - maxTextureDimension1D: " << limits.limits.maxTextureDimension1D << std::endl;
-		std::cout << " - maxTextureDimension2D: " << limits.limits.maxTextureDimension2D << std::endl;
-		std::cout << " - maxTextureDimension3D: " << limits.limits.maxTextureDimension3D << std::endl;
-		std::cout << " - maxTextureArrayLayers: " << limits.limits.maxTextureArrayLayers << std::endl;
-		std::cout << " - maxBindGroups: " << limits.limits.maxBindGroups << std::endl;
-		std::cout << " - maxDynamicUniformBuffersPerPipelineLayout: " << limits.limits.maxDynamicUniformBuffersPerPipelineLayout << std::endl;
-		std::cout << " - maxDynamicStorageBuffersPerPipelineLayout: " << limits.limits.maxDynamicStorageBuffersPerPipelineLayout << std::endl;
-		std::cout << " - maxSampledTexturesPerShaderStage: " << limits.limits.maxSampledTexturesPerShaderStage << std::endl;
-		std::cout << " - maxSamplersPerShaderStage: " << limits.limits.maxSamplersPerShaderStage << std::endl;
-		std::cout << " - maxStorageBuffersPerShaderStage: " << limits.limits.maxStorageBuffersPerShaderStage << std::endl;
-		std::cout << " - maxStorageTexturesPerShaderStage: " << limits.limits.maxStorageTexturesPerShaderStage << std::endl;
-		std::cout << " - maxUniformBuffersPerShaderStage: " << limits.limits.maxUniformBuffersPerShaderStage << std::endl;
-		std::cout << " - maxUniformBufferBindingSize: " << limits.limits.maxUniformBufferBindingSize << std::endl;
-		std::cout << " - maxStorageBufferBindingSize: " << limits.limits.maxStorageBufferBindingSize << std::endl;
-		std::cout << " - minUniformBufferOffsetAlignment: " << limits.limits.minUniformBufferOffsetAlignment << std::endl;
-		std::cout << " - minStorageBufferOffsetAlignment: " << limits.limits.minStorageBufferOffsetAlignment << std::endl;
-		std::cout << " - maxVertexBuffers: " << limits.limits.maxVertexBuffers << std::endl;
-		std::cout << " - maxVertexAttributes: " << limits.limits.maxVertexAttributes << std::endl;
-		std::cout << " - maxVertexBufferArrayStride: " << limits.limits.maxVertexBufferArrayStride << std::endl;
-		std::cout << " - maxInterStageShaderComponents: " << limits.limits.maxInterStageShaderComponents << std::endl;
-		std::cout << " - maxComputeWorkgroupStorageSize: " << limits.limits.maxComputeWorkgroupStorageSize << std::endl;
-		std::cout << " - maxComputeInvocationsPerWorkgroup: " << limits.limits.maxComputeInvocationsPerWorkgroup << std::endl;
-		std::cout << " - maxComputeWorkgroupSizeX: " << limits.limits.maxComputeWorkgroupSizeX << std::endl;
-		std::cout << " - maxComputeWorkgroupSizeY: " << limits.limits.maxComputeWorkgroupSizeY << std::endl;
-		std::cout << " - maxComputeWorkgroupSizeZ: " << limits.limits.maxComputeWorkgroupSizeZ << std::endl;
-		std::cout << " - maxComputeWorkgroupsPerDimension: " << limits.limits.maxComputeWorkgroupsPerDimension << std::endl;
-	}
-
+	Util::ListLimits(device);
 	
 	//TODO figure out what this means
 	auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
@@ -263,55 +261,20 @@ int main()
 
 	
 	//SWAPCHAIN
-	SwapChainDescriptor swapChainDescriptor;
-	swapChainDescriptor.width = windowWidth;
-	swapChainDescriptor.height = windowHeight;
-	swapChainDescriptor.usage = WGPUTextureUsage_RenderAttachment;
 	TextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
-	swapChainDescriptor.format = swapChainFormat;
-	swapChainDescriptor.presentMode = WGPUPresentMode_Mailbox; //TODO - mailbox?
-	SwapChain swapChain = device.createSwapChain(surface, swapChainDescriptor);
+	SwapChain swapChain = device.createSwapChain(surface, DescribeSwapChain(windowWidth, windowHeight, swapChainFormat));
 	
 	
 	Queue queue = device.getQueue();
 
 
-	//command buffer descs, use this to create the command buffer each frame
-	CommandEncoderDescriptor encoderDescriptor;
-	encoderDescriptor.label = "Default Encoder";
-
-	CommandBufferDescriptor bufferDescriptor;
-	bufferDescriptor.label = "Default command buffer";
 
 	//shader
-	ShaderModuleDescriptor shaderDescriptor;
-	shaderDescriptor.hintCount = 0;
-	shaderDescriptor.hints = nullptr;
-	ShaderModuleWGSLDescriptor shaderCodeDescriptor;
-	shaderCodeDescriptor.chain.next = nullptr;
-	shaderCodeDescriptor.chain.sType = SType::ShaderModuleWGSLDescriptor;
-
-	ifstream shaderFileStream;
-	shaderFileStream.open("E:/Anna/Anna/Visual Studio/rendwgpu/defaultshader.wgsl");
-	shaderFileStream.seekg(0, std::ios_base::end);
-	int shaderTextLength = (int) shaderFileStream.tellg();
-	shaderFileStream.seekg(0);
-	std::vector<char> shaderText(shaderTextLength);
-	shaderFileStream.read(shaderText.data(), shaderTextLength);
-	shaderFileStream.close();
-	shaderCodeDescriptor.code = shaderText.data();
-	shaderDescriptor.nextInChain = &shaderCodeDescriptor.chain;
-	ShaderModule shader = device.createShaderModule(shaderDescriptor);
+	ShaderModule shader = CreateShader(device, "E:/Anna/Anna/Visual Studio/rendwgpu/defaultshader.wgsl");
 
 	//render pipeline object
 	RenderPipelineDescriptor pipelineDescriptor;
 
-	pipelineDescriptor.vertex.bufferCount = 0;
-	pipelineDescriptor.vertex.buffers = nullptr;
-	pipelineDescriptor.vertex.module = shader;//shader module
-	pipelineDescriptor.vertex.entryPoint = "vs_main";
-	pipelineDescriptor.vertex.constantCount = 0;
-	pipelineDescriptor.vertex.constants = nullptr;
 
 	pipelineDescriptor.primitive.topology = PrimitiveTopology::TriangleList;
 	pipelineDescriptor.primitive.stripIndexFormat = IndexFormat::Undefined;
@@ -326,11 +289,12 @@ int main()
 	blendState.alpha.dstFactor = BlendFactor::One;
 	blendState.alpha.operation = BlendOperation::Add;
 
+	
 	ColorTargetState colorTarget;
 	colorTarget.format = swapChainFormat;
 	colorTarget.blend = &blendState;
 	colorTarget.writeMask = ColorWriteMask::All;
-
+	
 	FragmentState fragmentState;
 	fragmentState.module = shader;
 	fragmentState.entryPoint = "fs_main";
@@ -339,7 +303,7 @@ int main()
 	fragmentState.targetCount = 1;
 	fragmentState.targets = &colorTarget;
 	pipelineDescriptor.fragment = &fragmentState;
-
+	
 	TextureFormat depthTextureFormat = TextureFormat::Depth24Plus;
 	DepthStencilState depthState = Default;
 	depthState.depthCompare = CompareFunction::Less;
@@ -348,7 +312,7 @@ int main()
 	depthState.stencilReadMask = 0;
 	depthState.stencilWriteMask = 0;
 	pipelineDescriptor.depthStencil = &depthState;
-
+	
 
 	// Create the depth texture
 	TextureDescriptor depthTextureDesc;
@@ -361,7 +325,6 @@ int main()
 	depthTextureDesc.viewFormatCount = 1;
 	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureFormat;
 	Texture depthTexture = device.createTexture(depthTextureDesc);
-
 
 	// Create the view of the depth texture manipulated by the rasterizer
 	TextureViewDescriptor depthTextureViewDesc;
@@ -385,13 +348,11 @@ int main()
 
 	
 	//Model model("F:\\Extracted\\ESO\\sfpts\\model\\1520043.gr2", device, queue); //elstemple
-	Model model("F:\\Extracted\\ESO\\sfpts\\model\\2774573.gr2", device, queue); //bendu
 
 	//vertex buffer layouts
 	vector<VertexBufferLayout> vertexBufferLayouts(2);
-
-
 	vector<VertexAttribute> vertexBufferAttributes(2);
+
 	//position
 	vertexBufferAttributes[0].shaderLocation = 0;
 	vertexBufferAttributes[0].offset = 0;
@@ -400,7 +361,7 @@ int main()
 	vertexBufferAttributes[1].shaderLocation = 1;
 	vertexBufferAttributes[1].offset = 4 * sizeof(float);
 	vertexBufferAttributes[1].format = VertexFormat::Float32x3;
-
+	//vert buffer layout
 	vertexBufferLayouts[0].attributeCount = static_cast<uint32_t>(vertexBufferAttributes.size());
 	vertexBufferLayouts[0].attributes = vertexBufferAttributes.data();
 	vertexBufferLayouts[0].arrayStride = 32;
@@ -409,7 +370,6 @@ int main()
 
 	
 
-	int instanceCount = 32;
 
 	//create instance vert buffer
 	BufferDescriptor instanceVertBufferDesc;
@@ -420,6 +380,7 @@ int main()
 	Buffer instanceVertBuffer = device.createBuffer(instanceVertBufferDesc);
 
 	vector<VertexAttribute> instancePosVertAttribute(4);
+	//model matrix
 	instancePosVertAttribute[0].shaderLocation = 2;
 	instancePosVertAttribute[0].offset = 0;
 	instancePosVertAttribute[0].format = VertexFormat::Float32x4;
@@ -432,6 +393,7 @@ int main()
 	instancePosVertAttribute[3].shaderLocation = 5;
 	instancePosVertAttribute[3].offset = 12 * sizeof(float);
 	instancePosVertAttribute[3].format = VertexFormat::Float32x4;
+	//intance buffer layout
 	vertexBufferLayouts[1].attributeCount = static_cast<uint32_t>(instancePosVertAttribute.size());
 	vertexBufferLayouts[1].attributes = instancePosVertAttribute.data();
 	vertexBufferLayouts[1].arrayStride = sizeof(mat4);
@@ -442,9 +404,13 @@ int main()
 
 	pipelineDescriptor.vertex.bufferCount = static_cast<uint32_t>(vertexBufferLayouts.size());
 	pipelineDescriptor.vertex.buffers = vertexBufferLayouts.data();
+	pipelineDescriptor.vertex.module = shader;
+	pipelineDescriptor.vertex.entryPoint = "vs_main";
+	pipelineDescriptor.vertex.constantCount = 0;
+	pipelineDescriptor.vertex.constants = nullptr;
 
 
-
+	//UNIFORMS
 	int bindingCount = 1;
 	std::vector<BindGroupLayoutEntry> uniformLayoutEntries(bindingCount, Default);
 	//global uniform layout
@@ -458,6 +424,7 @@ int main()
 	uniformLayoutDesc.entries = uniformLayoutEntries.data();
 	BindGroupLayout uniformLayout = device.createBindGroupLayout(uniformLayoutDesc);
 
+	
 
 	//global uniform buffer
 	BufferDescriptor uniformBufferDesc;
@@ -531,6 +498,21 @@ int main()
 	ImGui_ImplWGPU_Init(device, 3, swapChainFormat, depthTextureFormat);
 
 
+	//INTERACTION
+	float cameraX;
+	float cameraY;
+
+	Model model("F:\\Extracted\\ESO\\sfpts\\model\\2774573.gr2", device, queue); //bendu
+	Model model2("F:\\Extracted\\ESO\\sfpts\\model\\2551833.gr2", device, queue); //alessia
+
+	//command buffer descs, use this to create the command buffer each frame
+	CommandEncoderDescriptor encoderDescriptor;
+	encoderDescriptor.label = "Default Encoder";
+
+	CommandBufferDescriptor bufferDescriptor;
+	bufferDescriptor.label = "Default command buffer";
+
+
 	cout << "Hello CMake." << endl;
 
 	while (!glfwWindowShouldClose(window)) {
@@ -539,6 +521,7 @@ int main()
 		uniformData.time = (float)glfwGetTime();
 		queue.writeBuffer(uniformBuffer, offsetof(Uniforms, time), &uniformData.time, sizeof(float) * 2); //also updating rotation speed
 
+		
 		for (int i = 0; i < instanceCount; i++) {
 			instanceData[i] = glm::rotate(mat4(1), uniformData.time * uniformData.rotationSpeed + glm::two_pi<float>() / instanceCount * i, vec3(0.f, 0.f, 1.f));
 			instanceData[i] = glm::translate(instanceData[i], vec3(modelPos[0], modelPos[1], modelPos[2]));
@@ -550,7 +533,7 @@ int main()
 
 		//queue.writeBuffer(uniformBuffer, offsetof(Uniforms, model), &uniformData.model, sizeof(mat4));
 		queue.writeBuffer(instanceVertBuffer, 0, instanceData.data(), instanceCount * sizeof(mat4)); //also updating rotation speed
-
+		
 
 		
 		TextureView nextFrame = swapChain.getCurrentTextureView();
@@ -600,9 +583,14 @@ int main()
 		renderPass.setBindGroup(0, uniformGroup, 0, nullptr);
 		renderPass.setVertexBuffer(0, model.vertBuffer, 0, model.vertBufferSize);
 		renderPass.setVertexBuffer(1, instanceVertBuffer, 0, instanceCount * sizeof(mat4));
-
 		renderPass.setIndexBuffer(model.idxBuffer, model.idx32 ? IndexFormat::Uint32 : IndexFormat::Uint16, 0, model.idxBufferSize);
 		renderPass.drawIndexed(model.idxCount, instanceCount, 0, 0, 0);
+
+		renderPass.setVertexBuffer(0, model2.vertBuffer, 0, model2.vertBufferSize);
+		renderPass.setIndexBuffer(model2.idxBuffer, model2.idx32 ? IndexFormat::Uint32 : IndexFormat::Uint16, 0, model.idxBufferSize);
+		renderPass.drawIndexed(model2.idxCount, instanceCount, 0, 0, 0);
+
+
 		//imgui
 		ImGui_ImplGlfw_NewFrame();
 		ImGui_ImplWGPU_NewFrame();
@@ -617,29 +605,41 @@ int main()
 		ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
 		renderPass.end();
 
-		wgpuTextureViewDrop(nextFrame);
-
+		nextFrame.drop();
 
 		CommandBuffer commandBuffer = encoder.finish(bufferDescriptor);
 		queue.submit(commandBuffer);
-
+		
 		swapChain.present();
-
 		
 		//std::cout << "nextTexture: " << nextFrame << std::endl;
 		//std::cout << "A" << std::endl;
 
 	}
 
+	pipeline.drop();
+	layout.drop();
 
-	wgpuSwapChainDrop(swapChain);
-	wgpuDeviceDrop(device);
-	wgpuAdapterDrop(adapter);
-	wgpuInstanceDrop(instance);
+	uniformGroup.drop();
+	uniformBuffer.drop();
+	uniformLayout.drop();
+
+	depthTextureView.drop();
+	depthTexture.drop();
+	swapChain.drop();
+	shader.drop();
+
+
+	device.drop();
+	adapter.drop();
+	surface.drop();
+	instance.drop();
+	
 
 	glfwDestroyWindow(window);
 
 
 	glfwTerminate();
+	cout << "SHUTDOWN" << endl;
 	return 0;
 }

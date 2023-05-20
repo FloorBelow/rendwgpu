@@ -14,6 +14,8 @@ public:
 	std::vector<wgpu::VertexAttribute> vertAttributes;
 
 	Model(const char* path, wgpu::Device& device, wgpu::Queue& queue);
+	~Model();
+
 
 private:
 	char* vertData;
@@ -37,4 +39,5 @@ private:
 		short u; //30
 		short v; //32
 	};
+
 };
